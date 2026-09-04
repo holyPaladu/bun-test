@@ -1,0 +1,58 @@
+# DATABASE_URL внутри .env сервисов рассчитан на localhost (для `bun run dev`
+# на хосте) — здесь он переопределён на имя сервиса `postgres`, так резолвится
+# в docker-сети. Остальные переменные (JWT_*, LOG_LEVEL и т.д.) берутся из .env
+# как есть — см. services/auth-service/README.md по `cp .env.example .env`
+# и `bun run jwt:generate-keys`.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d auth']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Собирает image auth-service. migrate ниже переиспользует его же —
+  # ради одного скрипта не нужен отдельный build.
+  auth-service:
+    build:
+      context: ./services/auth-service
+    image: test-project/auth-service:latest
+    env_file:
+      - ./services/auth-service/.env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/auth
+      PORT: 3000
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Без build: — переиспользует уже собранный image auth-service (Compose
+  # строит все build:-сервисы до старта контейнеров, так что к моменту,
+  # когда этот контейнер стартует, image уже готов).
+  migrate:
+    image: test-project/auth-service:latest
+    env_file:
+      - ./services/auth-service/.env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/auth
+    command: ['bun', 'run', 'db:migrate']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
