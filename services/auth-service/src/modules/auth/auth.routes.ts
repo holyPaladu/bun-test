@@ -4,11 +4,13 @@ import { AuthSchemas } from '@/modules/auth/schemas/auth.schemas'
 import type { LoginUser } from '@/modules/auth/use-cases/login-user'
 import type { RegisterUser } from '@/modules/auth/use-cases/register-user'
 import { RefreshToken } from '@/modules/auth//use-cases/refresh-token'
+import { Logout } from '@/modules/auth/use-cases/logout'
 
 export interface AuthRoutesDeps {
   registerUser: RegisterUser
   loginUser: LoginUser
   refreshToken: RefreshToken
+  logout: Logout
 }
 
 export const AuthRoutes = (deps: AuthRoutesDeps) =>
@@ -64,6 +66,21 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
           200: 'refreshTokenResponseSchema',
           401: 'errorResponseSchema',
           403: 'errorResponseSchema',
+          404: 'errorResponseSchema',
+          422: 'errorResponseSchema',
+        },
+      }
+    )
+    .post(
+      '/logout',
+      async ({ body }) => {
+        await deps.logout(body.refreshToken)
+        return { message: 'Logged out successfully' }
+      },
+      {
+        body: 'refreshTokenBodySchema',
+        response: {
+          200: 'registerResponseSchema',
           404: 'errorResponseSchema',
           422: 'errorResponseSchema',
         },

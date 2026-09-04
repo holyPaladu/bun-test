@@ -5,7 +5,8 @@ import { RefreshTokenRepository } from '@/modules/auth/repo/refresh-token.reposi
 import { LoginUserUseCase } from '@/modules/auth/use-cases/login-user'
 import { RegisterUserUseCase } from '@/modules/auth/use-cases/register-user'
 import { refreshTokenGenerator } from '@/shared/lib/token/refresh-token'
-import { RefreshTokenUseCase } from './use-cases/refresh-token'
+import { RefreshTokenUseCase } from '@/modules/auth/use-cases/refresh-token'
+import { LogoutUseCase } from '@/modules/auth/use-cases/logout'
 
 /**
  * Публичный вход в модуль: собирает репозиторий, use-case'ы и роуты
@@ -36,6 +37,10 @@ export const AuthModule = (container: Pick<Container, 'sql' | 'passwordHasher' |
       jwtSigner: container.jwtSigner,
       refreshTokenGenerator,
       refreshTokenTtlDays: container.env.REFRESH_TOKEN_TTL_DAYS,
+    }),
+    logout: LogoutUseCase({
+      sql: container.sql,
+      refreshTokenGenerator,
     }),
   }
 
