@@ -5,7 +5,7 @@ import { toRefreshToken } from '@/modules/auth/entities/refresh.entity'
 export interface RefreshTokenRepository {
   insert(input: { userId: string; tokenHash: string; expiresAt: Date, ip: string | null, userAgent: string | null }): Promise<RefreshToken>
   findByTokenHash(tokenHash: string): Promise<RefreshToken | null>
-  revoke(tokenId: string, newTokenId: string): Promise<void>
+  revoke(tokenId: string, newTokenId?: string | null): Promise<void>
 }
 
 export const RefreshTokenRepository = (sql: DatabaseClient): RefreshTokenRepository => ({
@@ -28,7 +28,7 @@ export const RefreshTokenRepository = (sql: DatabaseClient): RefreshTokenReposit
     return row ? toRefreshToken(row) : null
   },
 
-  revoke: async (tokenId, newTokenId) => {
+  revoke: async (tokenId, newTokenId = null) => {
     await sql`
       UPDATE refresh_tokens
       SET revoked_at = NOW(), last_used_at = NOW(), replaced_by = ${newTokenId}
