@@ -42,14 +42,15 @@ services:
 
   # Без build: — переиспользует уже собранный image auth-service (Compose
   # строит все build:-сервисы до старта контейнеров, так что к моменту,
-  # когда этот контейнер стартует, image уже готов).
+  # когда этот контейнер стартует, image уже готов). Миграции лежат в образе
+  # бандлом, а не бинарём, — см. Dockerfile.
   migrate:
     image: test-project/auth-service:latest
     env_file:
       - ./services/auth-service/.env
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/auth
-    command: ['bun', 'run', 'db:migrate']
+    command: ['bun', '/app/scripts/migrate.js']
     depends_on:
       postgres:
         condition: service_healthy
