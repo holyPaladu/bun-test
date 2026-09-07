@@ -113,20 +113,20 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
       )
       .get(
         '/sessions',
-        async ({ user, body }) => {
-          const data = await deps.getSessions(user.userId, body)
+        async ({ user, query }) => {
+          const data = await deps.getSessions(user.userId, query)
           return {
             items: data.items,
             pagination: {
-              perPage: body.perPage,
-              page: body.page,
+              perPage: query.perPage,
+              page: query.page,
               total: data.pagination.total,
               hasMore: data.pagination.hasMore,
             }
           }
         },
         {
-          body: 'PaginationBodySchema',
+          query: 'PaginationBodySchema',
           response: {
             200: 'GetSessionsResponseSchema',
             401: 'errorResponseSchema',
