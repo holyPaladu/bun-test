@@ -1,5 +1,6 @@
 export interface RefreshToken {
   id: string
+  sessionId: string
   userId: string
   tokenHash: string
   expiresAt: Date
@@ -13,6 +14,7 @@ export interface RefreshToken {
 
 export interface RefreshTokenRow {
   id: string
+  session_id: string
   user_id: string
   token_hash: string
   expires_at: Date
@@ -27,6 +29,7 @@ export interface RefreshTokenRow {
 
 export const toRefreshToken = (row: RefreshTokenRow): RefreshToken => ({
   id: row.id,
+  sessionId: row.session_id,
   userId: row.user_id,
   tokenHash: row.token_hash,
   expiresAt: row.expires_at,

@@ -19,7 +19,7 @@ export const AuthRepository = (sql: DatabaseClient): AuthRepository => ({
         VALUES (${email}, ${passwordHash})
         RETURNING id, email, password_hash, status, created_at, updated_at
       `
-      return toUser(row!)
+      return toUser(row)
     } catch (error) {
       if (isUniqueViolation(error)) throw new AlreadyExistsError("User")
       throw error

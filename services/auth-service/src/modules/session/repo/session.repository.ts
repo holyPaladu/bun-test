@@ -1,0 +1,46 @@
+import type { DatabaseClient } from '@/shared/database/client'
+import type { Session, SessionRevokedReason, SessionRow } from '@/modules/session/entities/session.entity'
+import { toSession } from '@/modules/session/entities/session.entity'
+
+export interface SessionRepository {
+  insert(input: { userId: string; ip: string | null; userAgent: string | null }): Promise<Session>
+  findById(id: string): Promise<Session | null>
+  revoke(id: string, reason: SessionRevokedReason): Promise<void>
+  touch(id: string, meta: { ip: string | null; userAgent: string | null }): Promise<void>
+}
+
+export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
+  insert: async ({ userId, ip, userAgent }) => {
+    const [row] = await sql<SessionRow[]>`
+      INSERT INTO sessions (user_id, ip_address, user_agent, last_seen_at)
+      VALUES (${userId}, ${ip}, ${userAgent}, NOW())
+      RETURNING id, user_id, created_at, last_seen_at, ip_address, user_agent, revoked_at, revoked_reason
+    `
+    return toSession(row)
+  },
+
+  findById: async (id) => {
+    const [row] = await sql<SessionRow[]>`
+      SELECT id, user_id, created_at, last_seen_at, ip_address, user_agent, revoked_at, revoked_reason
+      FROM sessions
+      WHERE id = ${id}
+    `
+    return row ? toSession(row) : null
+  },
+
+  revoke: async (id, reason) => {
+    await sql`
+      UPDATE sessions
+      SET revoked_at = NOW(), revoked_reason = ${reason}
+      WHERE id = ${id} AND revoked_at IS NULL
+    `
+  },
+
+  touch: async (id, { ip, userAgent }) => {
+    await sql`
+      UPDATE sessions
+      SET last_seen_at = NOW(), ip_address = ${ip}, user_agent = ${userAgent}
+      WHERE id = ${id}
+    `
+  },
+})

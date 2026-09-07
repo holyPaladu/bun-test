@@ -3,13 +3,13 @@ import { ErrorResponseSchemas } from '@/shared/errors/error-response.schema'
 import { AuthSchemas } from '@/modules/auth/schemas/auth.schemas'
 import type { LoginUser } from '@/modules/auth/use-cases/login-user'
 import type { RegisterUser } from '@/modules/auth/use-cases/register-user'
-import { RefreshToken } from '@/modules/auth//use-cases/refresh-token'
-import { Logout } from '@/modules/auth/use-cases/logout'
+import type { RotateTokens } from '@/modules/session/use-cases/rotate-tokens'
+import type { Logout } from '@/modules/session/use-cases/logout'
 
 export interface AuthRoutesDeps {
   registerUser: RegisterUser
   loginUser: LoginUser
-  refreshToken: RefreshToken
+  refreshToken: RotateTokens
   logout: Logout
 }
 
