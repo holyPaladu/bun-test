@@ -16,12 +16,12 @@ export const ChangePasswordUseCase = ({ sql, authRepo, passwordHasher }: ChangeP
     const storedUser = await authRepo.findById(userId)
     if (!storedUser) 
       throw new UnauthorizedError()
-    if (!passwordHasher.verify(oldPassword, storedUser.passwordHash))
+    if (!(await passwordHasher.verify(oldPassword, storedUser.passwordHash)))
       throw new UnauthorizedError()
 
     const newHash = await passwordHasher.hash(newPassword)
 
-    sql.begin(async (tx) => {
+    await sql.begin(async (tx) => {
       const repo = AuthRepository(tx)
       const sesssionRepo = SessionRepository(tx)
 

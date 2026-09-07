@@ -160,8 +160,9 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
       )
       .put(
         '/change-password',
-        async ({ user, body }) => {
-          return deps.changePasswordInside(user.userId, body)
+        async ({ user, body, set }) => {
+          await deps.changePasswordInside(user.userId, body)
+          set.status = 204
         },
         {
           body: 'changePasswordBodySchema',

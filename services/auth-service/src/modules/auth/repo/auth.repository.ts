@@ -50,7 +50,7 @@ export const AuthRepository = (sql: DatabaseClient): AuthRepository => ({
       UPDATE users
       SET password_hash = ${newPassHash}, updated_at = NOW()
       WHERE id = ${userId} AND password_hash = ${oldPassHash}
-      RETURNING ida
+      RETURNING id
     `
 
     return !!row
