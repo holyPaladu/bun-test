@@ -24,6 +24,7 @@ export const UserProfileRoutes = (deps: UserProfileRoutesDeps) =>
         response: {
           200: 'userProfileResponseSchema',
           401: 'errorResponseSchema',
+          404: 'errorResponseSchema',
           503: 'errorResponseSchema',
         },
         detail: { security: [{ bearerAuth: [] }] },
@@ -37,6 +38,7 @@ export const UserProfileRoutes = (deps: UserProfileRoutesDeps) =>
         response: {
           200: 'userProfileResponseSchema',
           401: 'errorResponseSchema',
+          404: 'errorResponseSchema',
           422: 'errorResponseSchema',
           503: 'errorResponseSchema',
         },

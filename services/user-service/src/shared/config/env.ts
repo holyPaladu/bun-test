@@ -14,6 +14,7 @@ const envSchema = t.Object({
   AUTH_JWT_AUDIENCE: t.String({ default: 'api', minLength: 1 }),
   AUTH_JWKS_TIMEOUT_MS: t.Number({ default: 3000, minimum: 100, maximum: 30000 }),
   AUTH_JWT_CLOCK_TOLERANCE_SEC: t.Number({ default: 5, minimum: 0, maximum: 60 }),
+  EVENT_CONSUMER_TOKEN: t.String({ minLength: 16 }),
   LOG_LEVEL: t.Union(
     [t.Literal('debug'), t.Literal('info'), t.Literal('warn'), t.Literal('error')],
     { default: 'info' },

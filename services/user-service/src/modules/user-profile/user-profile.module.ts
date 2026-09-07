@@ -6,13 +6,13 @@ import { UpdateMyProfileUseCase } from '@/modules/user-profile/use-cases/update-
 
 /** Собирает profile repository, use cases и HTTP routes. */
 export const createUserProfileModule = (
-  container: Pick<Container, 'sql' | 'jwtVerifier' | 'unitOfWork'>,
+  container: Pick<Container, 'sql' | 'jwtVerifier'>,
 ) => {
   const userProfileRepository = UserProfileRepository(container.sql)
 
   return UserProfileRoutes({
     jwtVerifier: container.jwtVerifier,
-    getMyProfile: GetMyProfileUseCase({ unitOfWork: container.unitOfWork }),
+    getMyProfile: GetMyProfileUseCase({ userProfileRepository }),
     updateMyProfile: UpdateMyProfileUseCase({ userProfileRepository }),
   })
 }

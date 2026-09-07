@@ -1,13 +1,16 @@
 import type { UserProfile } from '@/modules/user-profile/entities/user-profile.entity'
-import type { UserUnitOfWork } from '@/shared/database/user-unit-of-work'
+import type { UserProfileRepository } from '@/modules/user-profile/repo/user-profile.repository'
+import { NotFoundError } from '@/shared/errors/app-error'
 
 interface GetMyProfileDeps {
-  unitOfWork: UserUnitOfWork
+  userProfileRepository: UserProfileRepository
 }
 
-/** Временный lazy bootstrap до появления account-created consumer-а. */
-export const GetMyProfileUseCase = ({ unitOfWork }: GetMyProfileDeps) =>
-  (userId: string): Promise<UserProfile> =>
-    unitOfWork.run(({ userProfiles }) => userProfiles.getOrCreate(userId))
+export const GetMyProfileUseCase = ({ userProfileRepository }: GetMyProfileDeps) =>
+  async (userId: string): Promise<UserProfile> => {
+    const profile = await userProfileRepository.findById(userId)
+    if (!profile) throw new NotFoundError('User profile')
+    return profile
+  }
 
 export type GetMyProfile = ReturnType<typeof GetMyProfileUseCase>

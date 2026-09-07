@@ -2,12 +2,12 @@ import { describe, expect, mock, test } from 'bun:test'
 import type { UserProfile } from '@/modules/user-profile/entities/user-profile.entity'
 import type { UserProfileRepository } from '@/modules/user-profile/repo/user-profile.repository'
 import { GetMyProfileUseCase } from '@/modules/user-profile/use-cases/get-my-profile'
-import type { UserUnitOfWork } from '@/shared/database/user-unit-of-work'
+import { NotFoundError } from '@/shared/errors/app-error'
 
 const userId = '550e8400-e29b-41d4-a716-446655440000'
 
 describe('GetMyProfileUseCase', () => {
-  test('runs lazy profile creation through the transaction repository', async () => {
+  test('returns an existing profile without lazy creation', async () => {
     const profile: UserProfile = {
       id: userId,
       displayName: null,
@@ -18,15 +18,25 @@ describe('GetMyProfileUseCase', () => {
       updatedAt: new Date('2026-09-07T10:00:00.000Z'),
     }
     const userProfiles: UserProfileRepository = {
-      getOrCreate: mock(async () => profile),
+      createIfAbsent: mock(async () => {}),
+      findById: mock(async () => profile),
       update: mock(async () => profile),
     }
-    const unitOfWork: UserUnitOfWork = {
-      run: mock(async work => work({ userProfiles })),
+
+    await expect(GetMyProfileUseCase({ userProfileRepository: userProfiles })(userId))
+      .resolves.toBe(profile)
+    expect(userProfiles.findById).toHaveBeenCalledWith(userId)
+    expect(userProfiles.createIfAbsent).not.toHaveBeenCalled()
+  })
+
+  test('returns not found while an account-created event is still pending', async () => {
+    const userProfiles: UserProfileRepository = {
+      createIfAbsent: mock(async () => {}),
+      findById: mock(async () => null),
+      update: mock(async () => null),
     }
 
-    await expect(GetMyProfileUseCase({ unitOfWork })(userId)).resolves.toBe(profile)
-    expect(unitOfWork.run).toHaveBeenCalledTimes(1)
-    expect(userProfiles.getOrCreate).toHaveBeenCalledWith(userId)
+    await expect(GetMyProfileUseCase({ userProfileRepository: userProfiles })(userId))
+      .rejects.toBeInstanceOf(NotFoundError)
   })
 })

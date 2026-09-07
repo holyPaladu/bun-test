@@ -13,26 +13,28 @@ export interface UpdateUserProfileInput {
 }
 
 export interface UserProfileRepository {
-  getOrCreate(userId: string): Promise<UserProfile>
-  update(userId: string, input: UpdateUserProfileInput): Promise<UserProfile>
+  createIfAbsent(userId: string): Promise<void>
+  findById(userId: string): Promise<UserProfile | null>
+  update(userId: string, input: UpdateUserProfileInput): Promise<UserProfile | null>
 }
 
 export const UserProfileRepository = (sql: DatabaseClient): UserProfileRepository => ({
-  getOrCreate: async (userId) => {
+  createIfAbsent: async userId => {
     await sql`
       INSERT INTO user_profiles (user_id)
       VALUES (${userId})
       ON CONFLICT (user_id) DO NOTHING
     `
+  },
 
+  findById: async userId => {
     const [row] = await sql<UserProfileRow[]>`
       SELECT user_id, display_name, avatar_url, locale, timezone, created_at, updated_at
       FROM user_profiles
       WHERE user_id = ${userId}
     `
 
-    if (!row) throw new Error('Profile bootstrap did not produce a row')
-    return toUserProfile(row)
+    return row ? toUserProfile(row) : null
   },
 
   update: async (userId, input) => {
@@ -42,36 +44,20 @@ export const UserProfileRepository = (sql: DatabaseClient): UserProfileRepositor
     const hasTimezone = Object.hasOwn(input, 'timezone')
 
     const [row] = await sql<UserProfileRow[]>`
-      INSERT INTO user_profiles (user_id, display_name, avatar_url, locale, timezone)
-      VALUES (
-        ${userId},
-        ${input.displayName ?? null},
-        ${input.avatarUrl ?? null},
-        ${input.locale ?? null},
-        ${input.timezone ?? null}
-      )
-      ON CONFLICT (user_id) DO UPDATE SET
-        display_name = CASE
-          WHEN ${hasDisplayName} THEN EXCLUDED.display_name
-          ELSE user_profiles.display_name
-        END,
-        avatar_url = CASE
-          WHEN ${hasAvatarUrl} THEN EXCLUDED.avatar_url
-          ELSE user_profiles.avatar_url
-        END,
-        locale = CASE
-          WHEN ${hasLocale} THEN EXCLUDED.locale
-          ELSE user_profiles.locale
-        END,
-        timezone = CASE
-          WHEN ${hasTimezone} THEN EXCLUDED.timezone
-          ELSE user_profiles.timezone
-        END,
+      UPDATE user_profiles SET
+        display_name = CASE WHEN ${hasDisplayName} THEN ${input.displayName ?? null}
+                            ELSE display_name END,
+        avatar_url = CASE WHEN ${hasAvatarUrl} THEN ${input.avatarUrl ?? null}
+                          ELSE avatar_url END,
+        locale = CASE WHEN ${hasLocale} THEN ${input.locale ?? null}
+                      ELSE locale END,
+        timezone = CASE WHEN ${hasTimezone} THEN ${input.timezone ?? null}
+                        ELSE timezone END,
         updated_at = now()
+      WHERE user_id = ${userId}
       RETURNING user_id, display_name, avatar_url, locale, timezone, created_at, updated_at
     `
 
-    if (!row) throw new Error('Profile update returned no row')
-    return toUserProfile(row)
+    return row ? toUserProfile(row) : null
   },
 })
