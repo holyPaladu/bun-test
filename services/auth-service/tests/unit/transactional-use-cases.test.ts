@@ -1,27 +1,35 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { AuthRepository } from '@/modules/auth/repo/auth.repository'
-import type { UserRow } from '@/modules/auth/entities/user.entity'
+import { toAuthAccount } from '@/modules/auth/entities/auth-account.entity'
+import type { AuthAccountRow } from '@/modules/auth/entities/auth-account.entity'
 import type { RefreshTokenRow } from '@/modules/session/entities/refresh.entity'
 import type { SessionRow } from '@/modules/session/entities/session.entity'
 import { ChangePasswordUseCase } from '@/modules/auth/use-cases/change-password'
 import { LogoutAllUseCase } from '@/modules/session/use-cases/logout-all'
 import { LogoutUseCase } from '@/modules/session/use-cases/logout'
 import { RotateTokensUseCase } from '@/modules/session/use-cases/rotate-tokens'
-import { NotFoundError, UnauthorizedError, UserBlockedError } from '@/shared/errors/app-error'
+import {
+  AuthAccountBlockedError,
+  NotFoundError,
+  UnauthorizedError,
+} from '@/shared/errors/app-error'
 import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
 import type { RefreshTokenGenerator } from '@/shared/lib/token/refresh-token'
 import { createInMemoryDatabase } from '../helpers/in-memory-database'
+import { createAuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
 
 const userId = '00000000-0000-4000-8000-000000000001'
 const sessionId = '00000000-0000-4000-8000-000000000002'
 const refreshTokenId = '00000000-0000-4000-8000-000000000003'
 const day = 86_400_000
 
-const userRow = (overrides: Partial<UserRow> = {}): UserRow => ({
+const authAccountRow = (
+  overrides: Partial<AuthAccountRow> = {},
+): AuthAccountRow => ({
   id: userId,
   email: 'user@example.com',
   password_hash: 'hash:old-password',
-  status: 'active',
+  auth_status: 'active',
   created_at: new Date(),
   updated_at: new Date(),
   ...overrides,
@@ -67,12 +75,12 @@ describe('ChangePasswordUseCase', () => {
     verify: mock(async () => isValid),
   })
 
-  test('rejects a missing user', async () => {
+  test('rejects a missing auth account', async () => {
     const database = createInMemoryDatabase()
     const passwordHasher = hasher()
     const changePassword = ChangePasswordUseCase({
-      sql: database.sql,
-      authRepo: AuthRepository(database.sql),
+      unitOfWork: createAuthUnitOfWork(database.sql),
+      authRepository: AuthRepository(database.sql),
       passwordHasher,
     })
 
@@ -84,11 +92,11 @@ describe('ChangePasswordUseCase', () => {
 
   test('rejects an incorrect current password without writing', async () => {
     const database = createInMemoryDatabase()
-    database.users.push(userRow())
+    database.authAccounts.push(authAccountRow())
     const passwordHasher = hasher(false)
     const changePassword = ChangePasswordUseCase({
-      sql: database.sql,
-      authRepo: AuthRepository(database.sql),
+      unitOfWork: createAuthUnitOfWork(database.sql),
+      authRepository: AuthRepository(database.sql),
       passwordHasher,
     })
 
@@ -96,19 +104,19 @@ describe('ChangePasswordUseCase', () => {
       oldPassword: 'wrong-password', newPassword: 'new-password',
     })).rejects.toBeInstanceOf(UnauthorizedError)
     expect(passwordHasher.hash).not.toHaveBeenCalled()
-    expect(database.users[0].password_hash).toBe('hash:old-password')
+    expect(database.authAccounts[0].password_hash).toBe('hash:old-password')
   })
 
   test('changes the hash and revokes every active session in one transaction', async () => {
     const database = createInMemoryDatabase()
-    database.users.push(userRow())
+    database.authAccounts.push(authAccountRow())
     database.sessions.push(sessionRow(), sessionRow({
       id: '00000000-0000-4000-8000-000000000004',
     }))
     const passwordHasher = hasher(true)
     const changePassword = ChangePasswordUseCase({
-      sql: database.sql,
-      authRepo: AuthRepository(database.sql),
+      unitOfWork: createAuthUnitOfWork(database.sql),
+      authRepository: AuthRepository(database.sql),
       passwordHasher,
     })
 
@@ -118,8 +126,30 @@ describe('ChangePasswordUseCase', () => {
 
     expect(passwordHasher.verify).toHaveBeenCalledWith('old-password', 'hash:old-password')
     expect(passwordHasher.hash).toHaveBeenCalledWith('new-password')
-    expect(database.users[0].password_hash).toBe('hash:new-password')
+    expect(database.authAccounts[0].password_hash).toBe('hash:new-password')
     expect(database.sessions.every(row => row.revoked_reason === 'password_change')).toBe(true)
+  })
+
+  test('does not revoke sessions when a concurrent password update wins', async () => {
+    const database = createInMemoryDatabase()
+    database.authAccounts.push(authAccountRow({ password_hash: 'hash:concurrent-password' }))
+    database.sessions.push(sessionRow())
+
+    const authRepository = AuthRepository(database.sql)
+    authRepository.findById = mock(async () => toAuthAccount(authAccountRow()))
+    const changePassword = ChangePasswordUseCase({
+      unitOfWork: createAuthUnitOfWork(database.sql),
+      authRepository,
+      passwordHasher: hasher(true),
+    })
+
+    await expect(changePassword(userId, {
+      oldPassword: 'old-password',
+      newPassword: 'new-password',
+    })).rejects.toBeInstanceOf(UnauthorizedError)
+
+    expect(database.authAccounts[0].password_hash).toBe('hash:concurrent-password')
+    expect(database.sessions[0].revoked_at).toBeNull()
   })
 })
 
@@ -128,12 +158,21 @@ describe('LogoutUseCase', () => {
     const database = createInMemoryDatabase()
     database.sessions.push(session)
     database.refreshTokens.push(token)
-    return { database, logout: LogoutUseCase({ sql: database.sql, refreshTokenGenerator: generator() }) }
+    return {
+      database,
+      logout: LogoutUseCase({
+        unitOfWork: createAuthUnitOfWork(database.sql),
+        refreshTokenGenerator: generator(),
+      }),
+    }
   }
 
   test('rejects an unknown refresh token', async () => {
     const database = createInMemoryDatabase()
-    const logout = LogoutUseCase({ sql: database.sql, refreshTokenGenerator: generator() })
+    const logout = LogoutUseCase({
+      unitOfWork: createAuthUnitOfWork(database.sql),
+      refreshTokenGenerator: generator(),
+    })
     await expect(logout('raw-refresh')).rejects.toBeInstanceOf(NotFoundError)
   })
 
@@ -141,7 +180,8 @@ describe('LogoutUseCase', () => {
     const missingSession = createInMemoryDatabase()
     missingSession.refreshTokens.push(refreshRow())
     await expect(LogoutUseCase({
-      sql: missingSession.sql, refreshTokenGenerator: generator(),
+      unitOfWork: createAuthUnitOfWork(missingSession.sql),
+      refreshTokenGenerator: generator(),
     })('raw-refresh')).rejects.toBeInstanceOf(UnauthorizedError)
 
     const { logout } = setup(sessionRow({ revoked_at: new Date(), revoked_reason: 'logout' }))
@@ -181,18 +221,20 @@ describe('LogoutAllUseCase', () => {
 
 describe('RotateTokensUseCase', () => {
   const setup = (options: {
-    user?: UserRow | null
+    account?: AuthAccountRow | null
     session?: SessionRow | null
     token?: RefreshTokenRow | null
   } = {}) => {
     const database = createInMemoryDatabase()
-    if (options.user !== null) database.users.push(options.user ?? userRow())
+    if (options.account !== null) {
+      database.authAccounts.push(options.account ?? authAccountRow())
+    }
     if (options.session !== null) database.sessions.push(options.session ?? sessionRow())
     if (options.token !== null) database.refreshTokens.push(options.token ?? refreshRow())
     const refreshTokenGenerator = generator()
     const jwtSigner = { sign: mock(async () => 'new-access-token') }
     const rotate = RotateTokensUseCase({
-      sql: database.sql,
+      unitOfWork: createAuthUnitOfWork(database.sql),
       jwtSigner,
       refreshTokenGenerator,
       refreshTokenTtlDays: 10,
@@ -234,13 +276,15 @@ describe('RotateTokensUseCase', () => {
   })
 
   test('rejects a missing or blocked token owner', async () => {
-    await expect(setup({ user: null }).rotate('raw-refresh', {
+    await expect(setup({ account: null }).rotate('raw-refresh', {
       ip: null, userAgent: null,
     })).rejects.toBeInstanceOf(NotFoundError)
 
-    await expect(setup({ user: userRow({ status: 'blocked' }) }).rotate('raw-refresh', {
+    await expect(setup({
+      account: authAccountRow({ auth_status: 'blocked' }),
+    }).rotate('raw-refresh', {
       ip: null, userAgent: null,
-    })).rejects.toBeInstanceOf(UserBlockedError)
+    })).rejects.toBeInstanceOf(AuthAccountBlockedError)
   })
 
   test('issues a new pair, revokes the old token, and updates session metadata', async () => {

@@ -58,11 +58,11 @@ export class NotFoundError extends AppError {
 }
 
 /**
- * Пользователь существует и прошёл бы проверку пароля, но заблокирован —
+ * Учётная запись существует и прошла бы проверку пароля, но заблокирована —
  * это не проблема аутентификации (401), а запрет доступа по статусу
  * аккаунта, поэтому 403.
  */
-export class UserBlockedError extends AppError {
+export class AuthAccountBlockedError extends AppError {
   readonly code = 'USER_BLOCKED'
   readonly status = 403
 

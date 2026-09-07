@@ -5,6 +5,7 @@ import type { AccessTokenInput } from '@/shared/lib/jwt/jwt-signer'
 import type { AccessTokenPayload, JwtVerifier } from '@/shared/lib/jwt/jwt-verifier'
 import type { Logger } from '@/shared/lib/logger/logger'
 import { createInMemoryDatabase, type InMemoryDatabase } from '../helpers/in-memory-database'
+import { createAuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
 
 const password = 'password-123'
 const email = 'user@example.com'
@@ -57,6 +58,7 @@ const createContext = (): TestContext => {
     },
     jwtSigner,
     jwtVerifier,
+    unitOfWork: createAuthUnitOfWork(database.sql),
     env: {
       NODE_ENV: 'test',
       PORT: 3000,
@@ -128,7 +130,7 @@ describe('auth service HTTP e2e', () => {
     })] })
   })
 
-  test('registers a normalized user and validates request bodies', async () => {
+  test('registers a normalized auth account and validates request bodies', async () => {
     const response = await call(context, '/api/auth/register', {
       method: 'POST', body: { email: 'USER@EXAMPLE.COM', password },
     })
@@ -138,7 +140,7 @@ describe('auth service HTTP e2e', () => {
       success: true,
       data: { message: 'User registered successfully' },
     })
-    expect(context.database.users[0]).toMatchObject({
+    expect(context.database.authAccounts[0]).toMatchObject({
       email, password_hash: `hashed:${password}`,
     })
 
@@ -174,7 +176,7 @@ describe('auth service HTTP e2e', () => {
     expect(await json(sessions)).toMatchObject({
       success: true,
       data: {
-        items: [{ userId: context.database.users[0].id, userAgent: 'e2e-browser' }],
+        items: [{ userId: context.database.authAccounts[0].id, userAgent: 'e2e-browser' }],
         pagination: { page: 1, perPage: 10, total: 1, hasMore: false },
       },
     })
@@ -251,7 +253,7 @@ describe('auth service HTTP e2e', () => {
       body: { oldPassword: password, newPassword: 'new-password-456' },
     })
     expect(changed.status).toBe(204)
-    expect(context.database.users[0].password_hash).toBe('hashed:new-password-456')
+    expect(context.database.authAccounts[0].password_hash).toBe('hashed:new-password-456')
     expect(context.database.sessions[0].revoked_reason).toBe('password_change')
 
     expect((await login(context)).response.status).toBe(401)

@@ -3,8 +3,8 @@ import { ErrorResponseSchemas } from '@/shared/errors/error-response.schema'
 import { createAuthGuard } from '@/shared/http/guard/auth.guard'
 import type { JwtVerifier } from '@/shared/lib/jwt/jwt-verifier'
 import { AuthSchemas } from '@/modules/auth/schemas/auth.schemas'
-import type { LoginUser } from '@/modules/auth/use-cases/login-user'
-import type { RegisterUser } from '@/modules/auth/use-cases/register-user'
+import type { LoginAccount } from '@/modules/auth/use-cases/login-account'
+import type { RegisterAccount } from '@/modules/auth/use-cases/register-account'
 import type { RotateTokens } from '@/modules/session/use-cases/rotate-tokens'
 import type { Logout } from '@/modules/session/use-cases/logout'
 import type { LogoutAll } from '@/modules/session/use-cases/logout-all'
@@ -13,8 +13,8 @@ import { RevokeSessionByUserId } from '../session/use-cases/revoke-session-by-us
 import { ChangePassword } from './use-cases/change-password'
 
 export interface AuthRoutesDeps {
-  registerUser: RegisterUser
-  loginUser: LoginUser
+  registerAccount: RegisterAccount
+  loginAccount: LoginAccount
   refreshToken: RotateTokens
   logout: Logout
   logoutAll: LogoutAll
@@ -31,7 +31,7 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
     .post(
       '/register',
       async ({ body, set }) => {
-        await deps.registerUser(body)
+        await deps.registerAccount(body)
         set.status = 201
         return { message: 'User registered successfully' }
       },
@@ -50,7 +50,7 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
         const ip = server?.requestIP(request)?.address ?? null
         const userAgent = headers['user-agent'] ?? null
 
-        return deps.loginUser(body, { ip, userAgent })
+        return deps.loginAccount(body, { ip, userAgent })
       },
       {
         body: 'loginBodySchema',

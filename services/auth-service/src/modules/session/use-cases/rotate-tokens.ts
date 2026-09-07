@@ -1,15 +1,16 @@
-import type { DatabaseClient } from '@/shared/database/client'
-import { NotFoundError, UnauthorizedError, UserBlockedError } from '@/shared/errors/app-error'
+import type { AuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
+import {
+  AuthAccountBlockedError,
+  NotFoundError,
+  UnauthorizedError,
+} from '@/shared/errors/app-error'
 import type { JwtSigner } from '@/shared/lib/jwt/jwt-signer'
 import type { RefreshTokenGenerator } from '@/shared/lib/token/refresh-token'
 import type { Meta } from '@/shared/types/meta.type'
-import { AuthRepository } from '@/modules/auth/repo/auth.repository'
-import { RefreshTokenRepository } from '@/modules/session/repo/refresh-token.repository'
-import { SessionRepository } from '@/modules/session/repo/session.repository'
 import type { IssuedTokens } from '@/modules/session/use-cases/issue-tokens'
 
 export interface RotateTokensDeps {
-  sql: DatabaseClient
+  unitOfWork: AuthUnitOfWork
   jwtSigner: JwtSigner
   refreshTokenGenerator: RefreshTokenGenerator
   refreshTokenTtlDays: number
@@ -23,25 +24,22 @@ export interface RotateTokensDeps {
  * оборвать и уже выданный атакующему следующий токен из цепочки.
  */
 export const RotateTokensUseCase = ({
-  sql,
+  unitOfWork,
   jwtSigner,
   refreshTokenGenerator,
   refreshTokenTtlDays,
 }: RotateTokensDeps) =>
   async (refreshToken: string, meta: Meta): Promise<IssuedTokens> => {
     const tokenHash = refreshTokenGenerator.hash(refreshToken)
-    const tokens = await sql.begin(async (tx): Promise<IssuedTokens | null> => {
-      const authRepo = AuthRepository(tx)
-      const tokenRepo = RefreshTokenRepository(tx)
-      const sessionRepo = SessionRepository(tx)
-      const storedToken = await tokenRepo.findByTokenHashForUpdate(tokenHash)
+    const tokens = await unitOfWork.run(async (repositories): Promise<IssuedTokens | null> => {
+      const storedToken = await repositories.refreshTokens.findByTokenHashForUpdate(tokenHash)
       if (!storedToken) throw new UnauthorizedError()
 
-      const session = await sessionRepo.findById(storedToken.sessionId)
+      const session = await repositories.sessions.findById(storedToken.sessionId)
       if (!session || session.revokedAt) throw new UnauthorizedError()
 
       if (storedToken.revokedAt) {
-        await sessionRepo.revoke(session.id, 'reuse_detected')
+        await repositories.sessions.revoke(session.id, 'reuse_detected')
         // Ошибку бросаем после транзакции, иначе отзыв сессии откатится.
         return null
       }
@@ -51,13 +49,13 @@ export const RotateTokensUseCase = ({
         throw new UnauthorizedError()
       }
 
-      const user = await authRepo.findById(storedToken.userId)
-      if (!user) throw new NotFoundError('User')
-      if (user.status !== 'active') throw new UserBlockedError()
+      const account = await repositories.authAccounts.findById(storedToken.userId)
+      if (!account) throw new NotFoundError('Auth account')
+      if (account.authStatus !== 'active') throw new AuthAccountBlockedError()
 
       const accessToken = await jwtSigner.sign({ subject: storedToken.userId, sessionId: session.id })
       const newRefreshToken = refreshTokenGenerator.generate()
-      const token = await tokenRepo.insert({
+      const token = await repositories.refreshTokens.insert({
         sessionId: session.id,
         userId: storedToken.userId,
         tokenHash: refreshTokenGenerator.hash(newRefreshToken),
@@ -70,10 +68,10 @@ export const RotateTokensUseCase = ({
         ...meta,
       })
 
-      const revoked = await tokenRepo.revoke(storedToken.id, token.id)
+      const revoked = await repositories.refreshTokens.revoke(storedToken.id, token.id)
       if (!revoked) throw new UnauthorizedError('Refresh token reuse detected')
 
-      await sessionRepo.touch(session.id, meta)
+      await repositories.sessions.touch(session.id, meta)
       return { accessToken, refreshToken: newRefreshToken }
     })
 

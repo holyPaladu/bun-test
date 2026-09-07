@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { toUser } from '@/modules/auth/entities/user.entity'
+import { toAuthAccount } from '@/modules/auth/entities/auth-account.entity'
 import { toRefreshToken } from '@/modules/session/entities/refresh.entity'
 import { toSession } from '@/modules/session/entities/session.entity'
 import {
@@ -7,7 +7,7 @@ import {
   isAppError,
   NotFoundError,
   UnauthorizedError,
-  UserBlockedError,
+  AuthAccountBlockedError,
 } from '@/shared/errors/app-error'
 import { loadEnv } from '@/shared/config/env'
 import { refreshTokenGenerator } from '@/shared/lib/token/refresh-token'
@@ -16,12 +16,12 @@ import { normalizeEmail } from '@/shared/utils/normalizer'
 const date = new Date('2026-01-02T03:04:05.000Z')
 
 describe('entity mappers', () => {
-  test('maps a database user row to the domain shape', () => {
-    expect(toUser({
-      id: 'user-id', email: 'a@example.com', password_hash: 'hash', status: 'active',
+  test('maps a database auth-account row to the domain shape', () => {
+    expect(toAuthAccount({
+      id: 'user-id', email: 'a@example.com', password_hash: 'hash', auth_status: 'active',
       created_at: date, updated_at: date,
     })).toEqual({
-      id: 'user-id', email: 'a@example.com', passwordHash: 'hash', status: 'active',
+      id: 'user-id', email: 'a@example.com', passwordHash: 'hash', authStatus: 'active',
       createdAt: date, updatedAt: date,
     })
   })
@@ -71,7 +71,7 @@ describe('application errors', () => {
     [new AlreadyExistsError('User'), 409, 'ALREADY_EXISTS', 'User already exists'],
     [new UnauthorizedError(), 401, 'UNAUTHORIZED', 'Unauthorized'],
     [new NotFoundError('Session'), 404, 'NOT_FOUND', 'Session not found'],
-    [new UserBlockedError(), 403, 'USER_BLOCKED', 'User is blocked'],
+    [new AuthAccountBlockedError(), 403, 'USER_BLOCKED', 'User is blocked'],
   ])('exposes a stable HTTP contract', (error, status, code, message) => {
     expect(isAppError(error)).toBe(true)
     expect(error).toMatchObject({ status, code, message })

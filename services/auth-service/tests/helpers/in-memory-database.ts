@@ -1,7 +1,7 @@
 import type { DatabaseClient } from '@/shared/database/client'
 import type { RefreshTokenRow } from '@/modules/session/entities/refresh.entity'
 import type { SessionRow, SessionRevokedReason } from '@/modules/session/entities/session.entity'
-import type { UserRow } from '@/modules/auth/entities/user.entity'
+import type { AuthAccountRow } from '@/modules/auth/entities/auth-account.entity'
 
 const normalizeQuery = (parts: TemplateStringsArray) =>
   parts.join('?').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -10,13 +10,13 @@ const clone = <T>(value: T): T => structuredClone(value)
 
 export interface InMemoryDatabase {
   sql: DatabaseClient
-  users: UserRow[]
+  authAccounts: AuthAccountRow[]
   sessions: SessionRow[]
   refreshTokens: RefreshTokenRow[]
 }
 
 export const createInMemoryDatabase = (): InMemoryDatabase => {
-  const users: UserRow[] = []
+  const authAccounts: AuthAccountRow[] = []
   const sessions: SessionRow[] = []
   const refreshTokens: RefreshTokenRow[] = []
   let sequence = 1
@@ -29,32 +29,34 @@ export const createInMemoryDatabase = (): InMemoryDatabase => {
 
     if (text === 'select 1') return Promise.resolve([{ '?column?': 1 }])
 
-    if (text.startsWith('insert into users')) {
-      const row: UserRow = {
+    if (text.startsWith('insert into auth_accounts')) {
+      const row: AuthAccountRow = {
         id: id(),
         email: values[0] as string,
         password_hash: values[1] as string,
-        status: 'active',
+        auth_status: 'active',
         created_at: now,
         updated_at: now,
       }
-      users.push(row)
+      authAccounts.push(row)
       return Promise.resolve([clone(row)])
     }
 
-    if (text.includes('from users') && text.includes('where email = ?')) {
-      const row = users.find(user => user.email === values[0])
+    if (text.includes('from auth_accounts') && text.includes('where email = ?')) {
+      const row = authAccounts.find(account => account.email === values[0])
       return Promise.resolve(row ? [clone(row)] : [])
     }
 
-    if (text.includes('from users') && text.includes('where id = ?')) {
-      const row = users.find(user => user.id === values[0])
+    if (text.includes('from auth_accounts') && text.includes('where id = ?')) {
+      const row = authAccounts.find(account => account.id === values[0])
       return Promise.resolve(row ? [clone(row)] : [])
     }
 
-    if (text.startsWith('update users')) {
+    if (text.startsWith('update auth_accounts')) {
       const [newHash, userId, oldHash] = values as [string, string, string]
-      const row = users.find(user => user.id === userId && user.password_hash === oldHash)
+      const row = authAccounts.find(
+        account => account.id === userId && account.password_hash === oldHash,
+      )
       if (!row) return Promise.resolve([])
       row.password_hash = newHash
       row.updated_at = now
@@ -180,5 +182,5 @@ export const createInMemoryDatabase = (): InMemoryDatabase => {
   const sql = query as unknown as DatabaseClient
   sql.begin = (async (callback: (transaction: DatabaseClient) => unknown) => callback(sql)) as typeof sql.begin
 
-  return { sql, users, sessions, refreshTokens }
+  return { sql, authAccounts, sessions, refreshTokens }
 }

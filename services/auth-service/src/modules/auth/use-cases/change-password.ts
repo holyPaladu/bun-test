@@ -1,32 +1,38 @@
-import { PasswordHasher } from "@/shared/lib/hash/argon2-password-hasher"
-import { AuthRepository } from "../repo/auth.repository"
+import type { AuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
+import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
 import type { changePasswordBody } from '../schemas/auth.schemas'
-import { UnauthorizedError } from "@/shared/errors/app-error"
-import { DatabaseClient } from "@/shared/database/client"
-import { SessionRepository } from "@/modules/session/repo/session.repository"
+import { UnauthorizedError } from '@/shared/errors/app-error'
+import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
 
 export interface ChangePasswordDeps {
-  sql: DatabaseClient
-  authRepo: AuthRepository,
+  unitOfWork: AuthUnitOfWork
+  authRepository: AuthRepository
   passwordHasher: PasswordHasher
 }
 
-export const ChangePasswordUseCase = ({ sql, authRepo, passwordHasher }: ChangePasswordDeps) => 
+export const ChangePasswordUseCase = ({
+  unitOfWork,
+  authRepository,
+  passwordHasher,
+}: ChangePasswordDeps) =>
   async (userId: string, { oldPassword, newPassword }: changePasswordBody) => {
-    const storedUser = await authRepo.findById(userId)
-    if (!storedUser) 
+    const storedAccount = await authRepository.findById(userId)
+    if (!storedAccount) throw new UnauthorizedError()
+    if (!(await passwordHasher.verify(oldPassword, storedAccount.passwordHash))) {
       throw new UnauthorizedError()
-    if (!(await passwordHasher.verify(oldPassword, storedUser.passwordHash)))
-      throw new UnauthorizedError()
+    }
 
     const newHash = await passwordHasher.hash(newPassword)
 
-    await sql.begin(async (tx) => {
-      const repo = AuthRepository(tx)
-      const sesssionRepo = SessionRepository(tx)
+    await unitOfWork.run(async repositories => {
+      const passwordChanged = await repositories.authAccounts.setNewPasswordHash(
+        userId,
+        newHash,
+        storedAccount.passwordHash,
+      )
+      if (!passwordChanged) throw new UnauthorizedError()
 
-      await repo.setNewPasswordHash(userId, newHash, storedUser.passwordHash)
-      await sesssionRepo.revokeAllByUserId(userId, 'password_change')
+      await repositories.sessions.revokeAllByUserId(userId, 'password_change')
     })
   }
 

@@ -1,19 +1,18 @@
 import type { Container } from '@/container'
-import { SessionRepository } from '@/modules/session/repo/session.repository'
 import { RefreshTokenRepository } from '@/modules/session/repo/refresh-token.repository'
+import { SessionRepository } from '@/modules/session/repo/session.repository'
+import { GetSessionsUseCase } from '@/modules/session/use-cases/get-sessions'
 import { IssueTokensUseCase } from '@/modules/session/use-cases/issue-tokens'
-import { RotateTokensUseCase } from '@/modules/session/use-cases/rotate-tokens'
-import { LogoutUseCase } from '@/modules/session/use-cases/logout'
 import { LogoutAllUseCase } from '@/modules/session/use-cases/logout-all'
+import { LogoutUseCase } from '@/modules/session/use-cases/logout'
+import { RevokeSessionByUserIdUseCase } from '@/modules/session/use-cases/revoke-session-by-user-id'
+import { RotateTokensUseCase } from '@/modules/session/use-cases/rotate-tokens'
 import { refreshTokenGenerator } from '@/shared/lib/token/refresh-token'
-import { GetSessionsUseCase } from './use-cases/get-sessions'
-import { RevokeSessionByUserIdUseCase } from './use-cases/revoke-session-by-user-id'
 
-/**
- * Весь процесс access/refresh — выпуск, ротация, логаут — живёт здесь одним куском.
- * Проверки и изменения при ротации выполняются через репозитории одной транзакции.
- */
-export const SessionModule = (container: Pick<Container, 'sql' | 'jwtSigner' | 'env'>) => {
+/** Собирает session repository и use cases из общей runtime-инфраструктуры. */
+export const createSessionModule = (
+  container: Pick<Container, 'sql' | 'jwtSigner' | 'unitOfWork' | 'env'>,
+) => {
   const sessionRepository = SessionRepository(container.sql)
   const refreshTokenRepository = RefreshTokenRepository(container.sql)
 
@@ -27,25 +26,25 @@ export const SessionModule = (container: Pick<Container, 'sql' | 'jwtSigner' | '
       sessionAbsoluteTtlDays: container.env.SESSION_ABSOLUTE_TTL_DAYS,
     }),
     rotateTokens: RotateTokensUseCase({
-      sql: container.sql,
+      unitOfWork: container.unitOfWork,
       jwtSigner: container.jwtSigner,
       refreshTokenGenerator,
       refreshTokenTtlDays: container.env.REFRESH_TOKEN_TTL_DAYS,
     }),
     logout: LogoutUseCase({
-      sql: container.sql,
+      unitOfWork: container.unitOfWork,
       refreshTokenGenerator,
     }),
     logoutAll: LogoutAllUseCase({
       sql: container.sql,
     }),
     getSessions: GetSessionsUseCase({
-      sessionRepo: sessionRepository
+      sessionRepo: sessionRepository,
     }),
     revokeSessionByUserId: RevokeSessionByUserIdUseCase({
-      sessionRepo: sessionRepository
-    })
+      sessionRepo: sessionRepository,
+    }),
   }
 }
 
-export type SessionModule = ReturnType<typeof SessionModule>
+export type SessionModule = ReturnType<typeof createSessionModule>

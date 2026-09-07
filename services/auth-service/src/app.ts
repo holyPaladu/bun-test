@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 import type { Container } from '@/container'
-import { AuthModule } from '@/modules/auth'
+import { createAuthModule } from '@/modules/auth/auth.module'
 import { createAccessLog } from '@/shared/http/access-log'
 import { createErrorHandler } from '@/shared/http/error-handler'
 import { healthRoute } from '@/shared/http/routes/health/health.route'
@@ -23,7 +23,7 @@ export const createApp = (container: Container) =>
     .use(createJwksRoute(container.jwtVerifier))
     .group('/api', app => app
       .use(successEnvelope)
-      .use(AuthModule(container))
+      .use(createAuthModule(container))
     )
 
 export type App = ReturnType<typeof createApp>

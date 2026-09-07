@@ -3,12 +3,15 @@ import type { RegisterBody } from '@/modules/auth/schemas/auth.schemas'
 import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
 import { normalizeEmail } from '@/shared/utils/normalizer'
 
-interface RegisterUserDeps {
+interface RegisterAccountDeps {
   authRepository: AuthRepository
   passwordHasher: PasswordHasher
 }
 
-export const RegisterUserUseCase = ({ authRepository, passwordHasher }: RegisterUserDeps) =>
+export const RegisterAccountUseCase = ({
+  authRepository,
+  passwordHasher,
+}: RegisterAccountDeps) =>
   async (input: RegisterBody): Promise<void> => {
     const email = normalizeEmail(input.email)
     const passwordHash = await passwordHasher.hash(input.password)
@@ -16,4 +19,4 @@ export const RegisterUserUseCase = ({ authRepository, passwordHasher }: Register
     await authRepository.insert({ email, passwordHash })
   }
 
-export type RegisterUser = ReturnType<typeof RegisterUserUseCase>
+export type RegisterAccount = ReturnType<typeof RegisterAccountUseCase>
