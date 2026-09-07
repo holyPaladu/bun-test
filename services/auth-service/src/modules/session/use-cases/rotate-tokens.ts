@@ -46,7 +46,10 @@ export const RotateTokensUseCase = ({
         return null
       }
 
-      if (storedToken.expiresAt < new Date()) throw new UnauthorizedError()
+      const now = new Date()
+      if (session.absoluteExpiresAt <= now || storedToken.expiresAt <= now) {
+        throw new UnauthorizedError()
+      }
 
       const user = await authRepo.findById(storedToken.userId)
       if (!user) throw new NotFoundError('User')
@@ -58,7 +61,12 @@ export const RotateTokensUseCase = ({
         sessionId: session.id,
         userId: storedToken.userId,
         tokenHash: refreshTokenGenerator.hash(newRefreshToken),
-        expiresAt: new Date(Date.now() + refreshTokenTtlDays * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(
+          Math.min(
+            now.getTime() + refreshTokenTtlDays * 24 * 60 * 60 * 1000,
+            session.absoluteExpiresAt.getTime(),
+          ),
+        ),
         ...meta,
       })
 

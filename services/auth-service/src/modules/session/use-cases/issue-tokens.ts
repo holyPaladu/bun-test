@@ -10,6 +10,7 @@ export interface IssueTokensDeps {
   jwtSigner: JwtSigner
   refreshTokenGenerator: RefreshTokenGenerator
   refreshTokenTtlDays: number
+  sessionAbsoluteTtlDays: number
 }
 
 export interface IssuedTokens {
@@ -24,9 +25,15 @@ export const IssueTokensUseCase = ({
   jwtSigner,
   refreshTokenGenerator,
   refreshTokenTtlDays,
+  sessionAbsoluteTtlDays,
 }: IssueTokensDeps) =>
   async (userId: string, meta: Meta): Promise<IssuedTokens> => {
-    const session = await sessionRepository.insert({ userId, ...meta })
+    const now = Date.now()
+    const absoluteExpiresAt = new Date(now + sessionAbsoluteTtlDays * 24 * 60 * 60 * 1000)
+    const refreshExpiresAt = new Date(
+      Math.min(now + refreshTokenTtlDays * 24 * 60 * 60 * 1000, absoluteExpiresAt.getTime()),
+    )
+    const session = await sessionRepository.insert({ userId, absoluteExpiresAt, ...meta })
 
     const [accessToken, refreshToken] = await Promise.all([
       jwtSigner.sign({ userId }),
@@ -36,7 +43,7 @@ export const IssueTokensUseCase = ({
           sessionId: session.id,
           userId,
           tokenHash: refreshTokenGenerator.hash(refreshToken),
-          expiresAt: new Date(Date.now() + refreshTokenTtlDays * 24 * 60 * 60 * 1000),
+          expiresAt: refreshExpiresAt,
           ...meta,
         })
         return refreshToken

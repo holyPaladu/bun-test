@@ -5,7 +5,12 @@ import type { Session, SessionRevokedReason, SessionRow } from '@/modules/sessio
 import { toSession, RevokedSession } from '@/modules/session/entities/session.entity'
 
 export interface SessionRepository {
-  insert(input: { userId: string; ip: string | null; userAgent: string | null }): Promise<Session>
+  insert(input: {
+    userId: string
+    absoluteExpiresAt: Date
+    ip: string | null
+    userAgent: string | null
+  }): Promise<Session>
   findById(id: string): Promise<Session | null>
   revoke(id: string, reason: SessionRevokedReason): Promise<void>
   revokeAllByUserId(userId: string, reason: SessionRevokedReason): Promise<void>
@@ -15,18 +20,18 @@ export interface SessionRepository {
 }
 
 export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
-  insert: async ({ userId, ip, userAgent }) => {
+  insert: async ({ userId, absoluteExpiresAt, ip, userAgent }) => {
     const [row] = await sql<SessionRow[]>`
-      INSERT INTO sessions (user_id, ip_address, user_agent, last_seen_at)
-      VALUES (${userId}, ${ip}, ${userAgent}, NOW())
-      RETURNING id, user_id, created_at, last_seen_at, ip_address, user_agent, revoked_at, revoked_reason
+      INSERT INTO sessions (user_id, absolute_expires_at, ip_address, user_agent, last_seen_at)
+      VALUES (${userId}, ${absoluteExpiresAt}, ${ip}, ${userAgent}, NOW())
+      RETURNING id, user_id, created_at, absolute_expires_at, last_seen_at, ip_address, user_agent, revoked_at, revoked_reason
     `
     return toSession(row)
   },
 
   findById: async (id) => {
     const [row] = await sql<SessionRow[]>`
-      SELECT id, user_id, created_at, last_seen_at, ip_address, user_agent, revoked_at, revoked_reason
+      SELECT id, user_id, created_at, absolute_expires_at, last_seen_at, ip_address, user_agent, revoked_at, revoked_reason
       FROM sessions
       WHERE id = ${id}
     `
@@ -64,6 +69,7 @@ export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
           id,
           user_id,
           created_at,
+          absolute_expires_at,
           last_seen_at,
           ip_address,
           user_agent,

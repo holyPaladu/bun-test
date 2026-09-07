@@ -14,6 +14,7 @@ export const sessionSchema = t.Object({
   id: t.String({ format: 'uuid' }),
   userId: t.String({ format: 'uuid' }),
   createdAt: t.Date(),
+  absoluteExpiresAt: t.Date(),
   lastSeenAt: t.Nullable(t.Date()),
   ipAddress: t.Nullable(t.String()),
   userAgent: t.Nullable(t.String()),

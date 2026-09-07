@@ -16,6 +16,8 @@ const envSchema = t.Object({
   JWT_EXPIRES_IN: t.String({ default: '15m' }),
   /** Срок жизни refresh-токена в днях — сам токен не JWT, expiry считается вручную. */
   REFRESH_TOKEN_TTL_DAYS: t.Number({ default: 30, minimum: 1 }),
+  /** Абсолютный срок жизни сессии, который не продлевается при refresh-ротации. */
+  SESSION_ABSOLUTE_TTL_DAYS: t.Number({ default: 90, minimum: 1 }),
   LOG_LEVEL: t.Union(
     [t.Literal('debug'), t.Literal('info'), t.Literal('warn'), t.Literal('error')],
     { default: 'info' },

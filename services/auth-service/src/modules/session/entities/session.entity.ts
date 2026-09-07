@@ -15,6 +15,7 @@ export interface Session {
   id: string
   userId: string
   createdAt: Date
+  absoluteExpiresAt: Date
   lastSeenAt: Date | null
   ipAddress: string | null
   userAgent: string | null
@@ -26,6 +27,7 @@ export interface SessionRow {
   id: string
   user_id: string
   created_at: Date
+  absolute_expires_at: Date
   last_seen_at: Date | null
   ip_address: string | null
   user_agent: string | null
@@ -41,6 +43,7 @@ export const toSession = (row: SessionRow): Session => ({
   id: row.id,
   userId: row.user_id,
   createdAt: row.created_at,
+  absoluteExpiresAt: row.absolute_expires_at,
   lastSeenAt: row.last_seen_at,
   ipAddress: row.ip_address,
   userAgent: row.user_agent,

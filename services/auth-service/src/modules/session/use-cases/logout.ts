@@ -22,6 +22,7 @@ export const LogoutUseCase = (deps: LogoutUseCaseDeps) =>
 
       const session = await sessionRepo.findById(storedToken.sessionId)
       if (!session || session.revokedAt) throw new UnauthorizedError('Refresh token has been revoked')
+      if (session.absoluteExpiresAt <= new Date()) throw new UnauthorizedError('Session has expired')
       if (storedToken.expiresAt < new Date()) throw new UnauthorizedError('Refresh token has expired')
 
       await sessionRepo.revoke(session.id, 'logout')

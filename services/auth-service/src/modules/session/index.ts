@@ -24,6 +24,7 @@ export const SessionModule = (container: Pick<Container, 'sql' | 'jwtSigner' | '
       jwtSigner: container.jwtSigner,
       refreshTokenGenerator,
       refreshTokenTtlDays: container.env.REFRESH_TOKEN_TTL_DAYS,
+      sessionAbsoluteTtlDays: container.env.SESSION_ABSOLUTE_TTL_DAYS,
     }),
     rotateTokens: RotateTokensUseCase({
       sql: container.sql,
