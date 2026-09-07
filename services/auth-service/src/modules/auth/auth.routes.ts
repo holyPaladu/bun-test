@@ -150,7 +150,10 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
             204: 'voidResponseSchema',
             401: 'errorResponseSchema',
             404: 'errorResponseSchema',
-          }
+          },
+          detail: {
+            security: [{ bearerAuth: [] }],
+          },
         }
       )
     )
