@@ -31,6 +31,11 @@ bun run dev
 без исходников и `node_modules`: сервер — бинарь `/app/auth-service` (тот же,
 что даёт `bun run build`), миграции до его старта — `bun /app/scripts/migrate.js`.
 
+Production-сборка проходит обязательный quality gate: `bun run typecheck` и
+`bun test`. При ошибке типов или тестов `docker build` завершается с ошибкой;
+тестовые файлы и dev-зависимости в финальный образ не копируются. Только проверки
+можно запустить отдельно командой `docker build --target test .`.
+
 ## API
 
 | Метод | Путь | Описание |

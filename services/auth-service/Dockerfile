@@ -17,22 +17,18 @@ FROM base AS deps
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
-# ---- test: docker build --target test — гоняет typecheck + bun test. ----
-# Не участвует в дефолтной сборке (build/runtime от неё не зависят), поэтому
-# обычный `docker compose up --build` тесты не гоняет — только CI явно
-# через --target test. Сейчас упадёт: в проекте пока нет ни одного теста.
+# ---- test: обязательный quality gate для любой production-сборки. ----
+# В финальный образ тесты и dev-зависимости не попадут: runtime копирует из
+# build только готовый бинарь сервера и бандл миграций.
 FROM deps AS test
 COPY tsconfig.json ./
 COPY src ./src
 COPY scripts ./scripts
 COPY migrations ./migrations
-RUN bun run typecheck
-RUN bun test
+COPY tests ./tests
+RUN bun run typecheck && bun test
 
-FROM deps AS build
-COPY tsconfig.json ./
-COPY src ./src
-COPY scripts ./scripts
+FROM test AS build
 RUN bun run build && bun run build:migrate
 
 FROM base AS runtime
