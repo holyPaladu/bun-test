@@ -1,6 +1,6 @@
 import type { JwtSigner } from '@/shared/lib/jwt/jwt-signer'
 import type { RefreshTokenGenerator } from '@/shared/lib/token/refresh-token'
-import type { meta } from '@/shared/types/meta.type'
+import type { Meta } from '@/shared/types/meta.type'
 import type { SessionRepository } from '@/modules/session/repo/session.repository'
 import type { RefreshTokenRepository } from '@/modules/session/repo/refresh-token.repository'
 
@@ -25,7 +25,7 @@ export const IssueTokensUseCase = ({
   refreshTokenGenerator,
   refreshTokenTtlDays,
 }: IssueTokensDeps) =>
-  async (userId: string, meta: meta): Promise<IssuedTokens> => {
+  async (userId: string, meta: Meta): Promise<IssuedTokens> => {
     const session = await sessionRepository.insert({ userId, ...meta })
 
     const [accessToken, refreshToken] = await Promise.all([

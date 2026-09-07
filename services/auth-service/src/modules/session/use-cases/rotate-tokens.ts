@@ -2,7 +2,7 @@ import type { DatabaseClient } from '@/shared/database/client'
 import { NotFoundError, UnauthorizedError, UserBlockedError } from '@/shared/errors/app-error'
 import type { JwtSigner } from '@/shared/lib/jwt/jwt-signer'
 import type { RefreshTokenGenerator } from '@/shared/lib/token/refresh-token'
-import type { meta } from '@/shared/types/meta.type'
+import type { Meta } from '@/shared/types/meta.type'
 import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
 import type { SessionRepository } from '@/modules/session/repo/session.repository'
 import { RefreshTokenRepository } from '@/modules/session/repo/refresh-token.repository'
@@ -34,7 +34,7 @@ export const RotateTokensUseCase = ({
   refreshTokenGenerator,
   refreshTokenTtlDays,
 }: RotateTokensDeps) =>
-  async (refreshToken: string, meta: meta): Promise<IssuedTokens> => {
+  async (refreshToken: string, meta: Meta): Promise<IssuedTokens> => {
     const tokenHash = refreshTokenGenerator.hash(refreshToken)
     const storedToken = await refreshTokenRepository.findByTokenHash(tokenHash)
     if (!storedToken) throw new UnauthorizedError()

@@ -1,6 +1,6 @@
 import { NotFoundError, UnauthorizedError, UserBlockedError } from '@/shared/errors/app-error'
 import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
-import type { meta } from '@/shared/types/meta.type'
+import type { Meta } from '@/shared/types/meta.type'
 import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
 import type { LoginBody, LoginResponse } from '@/modules/auth/schemas/auth.schemas'
 import type { IssueTokens } from '@/modules/session/use-cases/issue-tokens'
@@ -12,7 +12,7 @@ interface LoginUserDeps {
 }
 
 export const LoginUserUseCase = ({ authRepository, passwordHasher, issueTokens }: LoginUserDeps) =>
-  async (input: LoginBody, meta: meta): Promise<LoginResponse> => {
+  async (input: LoginBody, meta: Meta): Promise<LoginResponse> => {
     const existUser = await authRepository.findByEmail(input.email)
     if (!existUser) throw new NotFoundError("User")
 
