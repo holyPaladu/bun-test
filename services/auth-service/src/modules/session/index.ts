@@ -7,6 +7,7 @@ import { RotateTokensUseCase } from '@/modules/session/use-cases/rotate-tokens'
 import { LogoutUseCase } from '@/modules/session/use-cases/logout'
 import { LogoutAllUseCase } from '@/modules/session/use-cases/logout-all'
 import { refreshTokenGenerator } from '@/shared/lib/token/refresh-token'
+import { GetSessionsUseCase } from './use-cases/get-sessions'
 
 /**
  * Весь процесс access/refresh — выпуск, ротация, логаут — живёт здесь одним куском.
@@ -43,6 +44,9 @@ export const SessionModule = (
     logoutAll: LogoutAllUseCase({
       sql: container.sql,
     }),
+    getSessions: GetSessionsUseCase({
+      sessionRepo: sessionRepository
+    })
   }
 }
 

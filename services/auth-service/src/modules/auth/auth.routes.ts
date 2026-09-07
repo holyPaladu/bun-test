@@ -8,6 +8,7 @@ import type { RegisterUser } from '@/modules/auth/use-cases/register-user'
 import type { RotateTokens } from '@/modules/session/use-cases/rotate-tokens'
 import type { Logout } from '@/modules/session/use-cases/logout'
 import type { LogoutAll } from '@/modules/session/use-cases/logout-all'
+import { GetSessions } from '../session/use-cases/get-sessions'
 
 export interface AuthRoutesDeps {
   registerUser: RegisterUser
@@ -16,6 +17,7 @@ export interface AuthRoutesDeps {
   logout: Logout
   logoutAll: LogoutAll
   jwtVerifier: JwtVerifier
+  getSessions: GetSessions
 }
 
 export const AuthRoutes = (deps: AuthRoutesDeps) =>
@@ -32,7 +34,7 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
       {
         body: 'registerBodySchema',
         response: {
-          201: 'registerResponseSchema',
+          201: 'messageResponseSchema',
           409: 'errorResponseSchema',
           422: 'errorResponseSchema',
         },
@@ -85,7 +87,7 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
       {
         body: 'refreshTokenBodySchema',
         response: {
-          200: 'registerResponseSchema',
+          200: 'messageResponseSchema',
           404: 'errorResponseSchema',
           422: 'errorResponseSchema',
         },
@@ -101,7 +103,32 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
         },
         {
           response: {
-            200: 'registerResponseSchema',
+            200: 'messageResponseSchema',
+            401: 'errorResponseSchema',
+          },
+          detail: {
+            security: [{ bearerAuth: [] }],
+          },
+        }
+      )
+      .get(
+        '/sessions',
+        async ({ user, body }) => {
+          const data = await deps.getSessions(user.userId, body)
+          return {
+            items: data.items,
+            pagination: {
+              perPage: body.perPage,
+              page: body.page,
+              total: data.pagination.total,
+              hasMore: data.pagination.hasMore,
+            }
+          }
+        },
+        {
+          body: 'PaginationBodySchema',
+          response: {
+            200: 'GetSessionsResponseSchema',
             401: 'errorResponseSchema',
           },
           detail: {

@@ -1,4 +1,6 @@
 import type { DatabaseClient } from '@/shared/database/client'
+import { PaginationInside } from '@/shared/types/meta.type';
+import { PaginatedResult } from '@/shared/types/result.type'
 import type { Session, SessionRevokedReason, SessionRow } from '@/modules/session/entities/session.entity'
 import { toSession } from '@/modules/session/entities/session.entity'
 
@@ -8,6 +10,7 @@ export interface SessionRepository {
   revoke(id: string, reason: SessionRevokedReason): Promise<void>
   revokeAllByUserId(userId: string, reason: SessionRevokedReason): Promise<void>
   touch(id: string, meta: { ip: string | null; userAgent: string | null }): Promise<void>
+  findAllByUserId(userId: string, pagination: PaginationInside): Promise<PaginatedResult<Session>>
 }
 
 export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
@@ -51,5 +54,44 @@ export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
       SET last_seen_at = NOW(), ip_address = ${ip}, user_agent = ${userAgent}
       WHERE id = ${id}
     `
+  },
+
+  findAllByUserId: async (userId, { limit, offset }) => {
+    const [rows, countRows] = await Promise.all([
+      sql<SessionRow[]>`
+        SELECT
+          id,
+          user_id,
+          created_at,
+          last_seen_at,
+          ip_address,
+          user_agent,
+          revoked_at,
+          revoked_reason
+        FROM sessions
+        WHERE user_id = ${userId}
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      `,
+
+      sql<{ total: string }[]>`
+        SELECT COUNT(*) AS total
+        FROM sessions
+        WHERE user_id = ${userId}
+      `
+    ])
+
+    const total = Number(countRows[0]?.total ?? 0)
+
+    return {
+      items: rows.map(toSession),
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + rows.length < total
+      }
+    }
   },
 })
