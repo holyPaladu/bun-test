@@ -1,5 +1,11 @@
 import { t } from 'elysia'
 
+export const messageResponseSchema = t.Object({
+  message: t.String(),
+})
+
+export type MessageResponse = typeof messageResponseSchema.static
+
 export const registerBodySchema = t.Object({
   email: t.String({ format: 'email' }),
   password: t.String({ minLength: 8 }),
@@ -41,11 +47,33 @@ export const refreshTokenResponseSchema = t.Object({
 
 export type RefreshTokenResponse = typeof refreshTokenResponseSchema.static
 
+export const PaginationBodySchema = t.Object({
+  perPage: t.Number(),
+  page: t.Number()
+})
+
+export type PaginationBody = typeof PaginationBodySchema.static
+
+export const GetSessionsResponseSchema = t.Object({
+  items: t.Array(t.Object({})),
+  pagination: t.Object({
+    total: t.Number(),
+    perPage: t.Number(),
+    page: t.Number(),
+    hasMore: t.Boolean()
+  })
+})
+
+export type GetSessionsResponse = typeof GetSessionsResponseSchema.static
+
 export const AuthSchemas = {
+  messageResponseSchema,
   registerBodySchema,
   registerResponseSchema,
   loginBodySchema,
   loginResponseSchema,
   refreshTokenBodySchema,
   refreshTokenResponseSchema,
+  PaginationBodySchema,
+  GetSessionsResponseSchema,
 }
