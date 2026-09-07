@@ -26,7 +26,7 @@
 | 5 | Logout отзывает один токен, а не сессию | `logout.ts:20` | 🚧 |
 | 6 | Logout — оракул существования токена (404) | `logout.ts:18` | 🚧 |
 | 7 | Ротация продлевает TTL бесконечно, цепочка не умирает никогда | `refresh-token.ts:48` | 🚧 |
-| 8 | User enumeration + тайминг-оракул на логине | `login-user.ts:29` | 🚧 |
+| 8 | User enumeration + тайминг-оракул на логине | `login-account.ts` | ⚠️ единый `401`, тайминг ещё различается |
 | 9 | Нет лимита активных сессий и чистки просроченных строк | — | 🚧 |
 | 10 | `ip_address` / `user_agent` пишутся, но не используются | — | 🚧 |
 
@@ -79,10 +79,9 @@
 
 ### 8. User enumeration на логине
 
-`login-user.ts:29` — `NotFoundError("User")` (`404`) при отсутствии пользователя против
-`UnauthorizedError` (`401`) при неверном пароле. Плюс при отсутствии пользователя argon2
-не вызывается → ещё и тайминг-оракул. Прямо к теме краж не относится, но это в том же файле
-и это способ узнать, чьи токены вообще имеет смысл красть.
+`login-account.ts` теперь возвращает одинаковый `UnauthorizedError` (`401`) и для
+неизвестного login email, и для неверного пароля. Полное выравнивание времени через
+проверку фиктивного argon2-хэша остаётся отдельным усилением.
 
 ---
 
@@ -156,8 +155,8 @@ const result = await sql.begin(async (tx) => {
   if (stored.expiresAt < now)             return { ok: false }
   if (family.absoluteExpiresAt < now)     return { ok: false }   // дыра 7
 
-  const user = await findById(stored.userId)
-  if (!user || user.status !== 'active')  return { ok: false, blocked: true }
+  const account = await findById(stored.userId)
+  if (!account || account.authStatus !== 'active') return { ok: false, blocked: true }
 
   const newRow  = await insert({ familyId: stored.familyId, /* ... */ })
   const rotated = await rotate(stored.id, newRow.id)
@@ -211,12 +210,12 @@ if (!result.ok)   throw new UnauthorizedError()
 
 - Новая `family_id` на каждый логин (`gen_random_uuid()` или id первого токена),
   `absolute_expires_at = now() + N дней`.
-- `NotFoundError("User")` (`login-user.ts:29`) → `InvalidCredentialsError` `401`, тот же ответ,
-  что и на неверный пароль. И прогонять argon2 по фиктивному хэшу, когда пользователь не найден,
+- Неизвестный account и неверный пароль уже дают одинаковый `401`. Дополнительно прогонять
+  argon2 по фиктивному хэшу, когда учётная запись не найдена,
   чтобы выровнять тайминг.
 - Лимит активных сессий (5-10): при превышении отзывать самую старую family.
 - `sid` в JWT-payload — пригодится и для корреляции логов, и если позже добавится проверка отзыва.
-- Порядок в `Promise.all` (`login-user.ts:36-48`) корректен, но с family проще собрать всё
+- Порядок выпуска токенов в `login-account.ts` корректен, но с family проще собрать всё
   последовательно.
 
 ---

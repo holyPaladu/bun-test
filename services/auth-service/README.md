@@ -1,7 +1,12 @@
 # auth-service
 
-Сервис аутентификации на Bun + Elysia. Modular Monolith с чистой архитектурой
-внутри каждого модуля.
+Сервис аутентификации на Bun + Elysia. Владеет учётными записями
+(`auth_accounts`), login email, password hash, статусом доступа, сессиями и
+refresh-токенами. Пользовательские профили принадлежат отдельному
+`user-service`.
+
+Feature-модули собираются в явно названных `*.module.ts`; `index.ts` не содержит
+composition logic. Общий `container.ts` предоставляет только runtime-инфраструктуру.
 
 ## Запуск
 
@@ -41,7 +46,12 @@ Production-сборка проходит обязательный quality gate: 
 | Метод | Путь | Описание |
 |---|---|---|
 | `GET` | `/health/check` | Проверка живости |
-| `POST` | `/auth/register` | Регистрация: 201 / 409 / 422 |
+| `POST` | `/api/auth/register` | Регистрация: 201 / 409 / 422 |
+
+После миграции `0006_rename_users_to_auth_accounts.sql` доменная сущность и
+таблица называются `AuthAccount`/`auth_accounts`, а статус входа —
+`authStatus`/`auth_status`. `sessions.user_id` и `refresh_tokens.user_id`
+продолжают ссылаться на канонический UUID учётной записи.
 
 Формат ошибки одинаков для всех эндпоинтов:
 

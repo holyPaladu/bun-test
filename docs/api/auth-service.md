@@ -1,7 +1,15 @@
 # auth-service — API
 
+План разделения auth-account и пользовательского профиля, включая использование
+JWT/JWKS в `user-service`, описан в
+[`docs/architecture/user-service-separation.md`](../architecture/user-service-separation.md).
+
 Базовый префикс бизнес-роутов: `/api`. Служебные роуты (`/health`, `/.well-known/jwks.json`)
 вне `/api` и вне версионирования.
+
+Сервис хранит credentials в `auth_accounts`; доменная сущность называется
+`AuthAccount`, а поле, разрешающее вход, — `authStatus` (`auth_status` в БД).
+Профильные поля находятся только в `user-service`.
 
 Формат ошибки одинаков для всех эндпоинтов:
 
@@ -87,7 +95,7 @@
 
 **Ответ `200`**
 ```json
-{ "id": "uuid", "email": "user@example.com", "status": "active", "createdAt": "..." }
+{ "id": "uuid", "email": "user@example.com", "authStatus": "active", "createdAt": "..." }
 ```
 
 Ошибки: `401 UNAUTHORIZED`
