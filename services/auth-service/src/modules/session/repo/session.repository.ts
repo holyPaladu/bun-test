@@ -2,7 +2,7 @@ import type { DatabaseClient } from '@/shared/database/client'
 import { PaginationInside } from '@/shared/types/meta.type';
 import { PaginatedResult } from '@/shared/types/result.type'
 import type { Session, SessionRevokedReason, SessionRow } from '@/modules/session/entities/session.entity'
-import { toSession } from '@/modules/session/entities/session.entity'
+import { toSession, RevokedSession } from '@/modules/session/entities/session.entity'
 
 export interface SessionRepository {
   insert(input: { userId: string; ip: string | null; userAgent: string | null }): Promise<Session>
@@ -11,6 +11,7 @@ export interface SessionRepository {
   revokeAllByUserId(userId: string, reason: SessionRevokedReason): Promise<void>
   touch(id: string, meta: { ip: string | null; userAgent: string | null }): Promise<void>
   findAllByUserId(userId: string, pagination: PaginationInside): Promise<PaginatedResult<Session>>
+  revokeSessionByUserId(sessionId: string, userId: string, reason: SessionRevokedReason): Promise<boolean>
 }
 
 export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
@@ -94,4 +95,19 @@ export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
       }
     }
   },
+
+  revokeSessionByUserId: async (sessionId, userId, reason) => {
+    const [row] = await sql<RevokedSession[]>`
+      UPDATE sessions
+      SET
+        revoked_at = NOW(),
+        revoked_reason = ${reason}
+      WHERE id = ${sessionId}
+        AND user_id = ${userId}
+        AND revoked_at IS NULL
+      RETURNING id
+    `
+
+    return row !== undefined
+  }
 })

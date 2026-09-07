@@ -32,7 +32,8 @@ export const AuthModule = (container: Pick<Container, 'sql' | 'passwordHasher' |
     logout: session.logout,
     logoutAll: session.logoutAll,
     jwtVerifier: container.jwtVerifier,
-    getSessions: session.getSessions
+    getSessions: session.getSessions,
+    revokeSessionByUserId: session.revokeSessionByUserId
   }
 
   return AuthRoutes(usecase)

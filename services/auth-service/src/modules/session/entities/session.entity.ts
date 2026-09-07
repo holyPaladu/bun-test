@@ -1,4 +1,14 @@
-export type SessionRevokedReason = 'logout' | 'logout_all' | 'reuse_detected' | 'session_limit'
+export const SESSION_REVOKED_REASONS = [
+    'logout',           // выход с текущего устройства через refresh token
+    'user_revoked',     // пользователь вручную отключил конкретное устройство
+    'logout_all',       // выход со всех устройств
+    'reuse_detected',   // обнаружено повторное использование refresh token
+    'session_limit',    // удалена из-за лимита сессий
+  ] as const
+
+export type SessionRevokedReason =
+  (typeof SESSION_REVOKED_REASONS)[number]
+
 
 export interface Session {
   id: string
@@ -20,6 +30,10 @@ export interface SessionRow {
   user_agent: string | null
   revoked_at: Date | null
   revoked_reason: SessionRevokedReason | null
+}
+
+export type RevokedSession = {
+  id: string
 }
 
 export const toSession = (row: SessionRow): Session => ({

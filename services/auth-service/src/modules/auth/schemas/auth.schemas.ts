@@ -1,4 +1,5 @@
 import { t } from 'elysia'
+import { SESSION_REVOKED_REASONS } from '@/modules/session/entities/session.entity'
 
 export const messageResponseSchema = t.Object({
   message: t.String(),
@@ -6,7 +7,10 @@ export const messageResponseSchema = t.Object({
 
 export type MessageResponse = typeof messageResponseSchema.static
 
-export const SessionSchema = t.Object({
+export const sessionRevokeReasonSchema = t.UnionEnum(SESSION_REVOKED_REASONS)
+export type sessionRevokeReason = typeof sessionRevokeReasonSchema.static
+
+export const sessionSchema = t.Object({
   id: t.String({ format: 'uuid' }),
   userId: t.String({ format: 'uuid' }),
   createdAt: t.Date(),
@@ -14,15 +18,18 @@ export const SessionSchema = t.Object({
   ipAddress: t.Nullable(t.String()),
   userAgent: t.Nullable(t.String()),
   revokedAt: t.Nullable(t.Date()),
-  revokedReason: t.Nullable(
-    t.Union([
-      t.Literal('logout'),
-      t.Literal('logout_all'),
-      t.Literal('reuse_detected'),
-      t.Literal('session_limit'),
-    ]),
-  ),
+  revokedReason: t.Nullable(sessionRevokeReasonSchema),
 })
+
+export type Session = typeof sessionSchema.static
+
+export const paramsIdSchema = t.Object({ id: t.String({ format: 'uuid' })})
+export type ParamsId = typeof paramsIdSchema.static
+
+export const voidResponseSchema = t.Void()
+export type voidResponse = typeof voidResponseSchema.static
+
+// =================================
 
 export const registerBodySchema = t.Object({
   email: t.String({ format: 'email' }),
@@ -65,15 +72,15 @@ export const refreshTokenResponseSchema = t.Object({
 
 export type RefreshTokenResponse = typeof refreshTokenResponseSchema.static
 
-export const PaginationBodySchema = t.Object({
+export const paginationBodySchema = t.Object({
   perPage: t.Number(),
   page: t.Number()
 })
 
-export type PaginationBody = typeof PaginationBodySchema.static
+export type PaginationBody = typeof paginationBodySchema.static
 
-export const GetSessionsResponseSchema = t.Object({
-  items: t.Array(SessionSchema),
+export const getSessionsResponseSchema = t.Object({
+  items: t.Array(sessionSchema),
   pagination: t.Object({
     total: t.Number(),
     perPage: t.Number(),
@@ -82,16 +89,19 @@ export const GetSessionsResponseSchema = t.Object({
   })
 })
 
-export type GetSessionsResponse = typeof GetSessionsResponseSchema.static
+export type GetSessionsResponse = typeof getSessionsResponseSchema.static
 
 export const AuthSchemas = {
   messageResponseSchema,
+  paramsIdSchema,
+  voidResponseSchema,
+
   registerBodySchema,
   registerResponseSchema,
   loginBodySchema,
   loginResponseSchema,
   refreshTokenBodySchema,
   refreshTokenResponseSchema,
-  PaginationBodySchema,
-  GetSessionsResponseSchema,
+  paginationBodySchema,
+  getSessionsResponseSchema,
 }

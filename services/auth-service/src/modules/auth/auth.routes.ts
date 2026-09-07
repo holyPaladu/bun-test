@@ -9,6 +9,7 @@ import type { RotateTokens } from '@/modules/session/use-cases/rotate-tokens'
 import type { Logout } from '@/modules/session/use-cases/logout'
 import type { LogoutAll } from '@/modules/session/use-cases/logout-all'
 import { GetSessions } from '../session/use-cases/get-sessions'
+import { RevokeSessionByUserId } from '../session/use-cases/revoke-session-by-user-id'
 
 export interface AuthRoutesDeps {
   registerUser: RegisterUser
@@ -18,6 +19,7 @@ export interface AuthRoutesDeps {
   logoutAll: LogoutAll
   jwtVerifier: JwtVerifier
   getSessions: GetSessions
+  revokeSessionByUserId: RevokeSessionByUserId
 }
 
 export const AuthRoutes = (deps: AuthRoutesDeps) =>
@@ -126,14 +128,29 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
           }
         },
         {
-          query: 'PaginationBodySchema',
+          query: 'paginationBodySchema',
           response: {
-            200: 'GetSessionsResponseSchema',
+            200: 'getSessionsResponseSchema',
             401: 'errorResponseSchema',
           },
           detail: {
             security: [{ bearerAuth: [] }],
           },
+        }
+      )
+      .delete(
+        '/session/:id',
+        async ({ user, params, set }) => {
+          await deps.revokeSessionByUserId(params.id, user.userId, 'user_revoked')
+          set.status = 204
+        },
+        {
+          params: 'paramsIdSchema',
+          response: {
+            204: 'voidResponseSchema',
+            401: 'errorResponseSchema',
+            404: 'errorResponseSchema',
+          }
         }
       )
     )
