@@ -12,7 +12,8 @@ export interface RefreshTokenRepository {
     userAgent: string | null
   }): Promise<RefreshToken>
   findByTokenHash(tokenHash: string): Promise<RefreshToken | null>
-  revoke(tokenId: string, newTokenId?: string | null): Promise<void>
+  findByTokenHashForUpdate(tokenHash: string): Promise<RefreshToken | null>
+  revoke(tokenId: string, newTokenId?: string | null): Promise<boolean>
 }
 
 export const RefreshTokenRepository = (sql: DatabaseClient): RefreshTokenRepository => ({
@@ -35,11 +36,24 @@ export const RefreshTokenRepository = (sql: DatabaseClient): RefreshTokenReposit
     return row ? toRefreshToken(row) : null
   },
 
+  findByTokenHashForUpdate: async (tokenHash) => {
+    const [row] = await sql<RefreshTokenRow[]>`
+      SELECT id, session_id, user_id, token_hash, expires_at, created_at, revoked_at, ip_address, user_agent, last_used_at, replaced_by
+      FROM refresh_tokens
+      WHERE token_hash = ${tokenHash}
+      FOR UPDATE
+    `
+    return row ? toRefreshToken(row) : null
+  },
+
   revoke: async (tokenId, newTokenId = null) => {
-    await sql`
+    const [row] = await sql<{ id: string }[]>`
       UPDATE refresh_tokens
       SET revoked_at = NOW(), last_used_at = NOW(), replaced_by = ${newTokenId}
-      WHERE id = ${tokenId}
+      WHERE id = ${tokenId} AND revoked_at IS NULL
+      RETURNING id
     `
+
+    return !!row
   },
 })

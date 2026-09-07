@@ -17,7 +17,7 @@ import { ChangePasswordUseCase } from './use-cases/change-password'
  */
 export const AuthModule = (container: Pick<Container, 'sql' | 'passwordHasher' | 'jwtSigner' | 'jwtVerifier' | 'env'>) => {
   const authRepository = AuthRepository(container.sql)
-  const session = SessionModule({ ...container, authRepository })
+  const session = SessionModule(container)
 
   const usecase = {
     registerUser: RegisterUserUseCase({
