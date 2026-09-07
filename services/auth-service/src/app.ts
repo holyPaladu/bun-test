@@ -7,6 +7,8 @@ import { healthRoute } from '@/shared/http/routes/health/health.route'
 import { createJwksRoute } from '@/shared/http/routes/jwks/jwks.route'
 import { openapiPlugin } from '@/shared/http/openapi'
 import { successEnvelope } from '@/shared/http/success-envelope'
+import type { IntegrationEventsModule } from '@/modules/integration-events/integration-events.module'
+import { createIntegrationEventsModule } from '@/modules/integration-events/integration-events.module'
 
 /**
  * Сборка HTTP-приложения из модулей: бизнес-роуты живут под /api, служебные — нет.
@@ -14,13 +16,17 @@ import { successEnvelope } from '@/shared/http/success-envelope'
  * successEnvelope внутри группы scoped-хуком подхватывает и всё, что идёт в
  * родителе после точки подключения (см. success-envelope.ts).
  */
-export const createApp = (container: Container) =>
+export const createApp = (
+  container: Container,
+  integrationEvents: IntegrationEventsModule = createIntegrationEventsModule(container),
+) =>
   new Elysia()
     .use(createErrorHandler(container.logger))
     .use(createAccessLog(container.logger))
     .use(openapiPlugin)
     .use(healthRoute(container.sql))
     .use(createJwksRoute(container.jwtVerifier))
+    .use(integrationEvents.metricsRoutes)
     .group('/api', app => app
       .use(successEnvelope)
       .use(createAuthModule(container))

@@ -16,7 +16,7 @@ export const createAuthModule = (container: Pick<
 
   return AuthRoutes({
     registerAccount: RegisterAccountUseCase({
-      authRepository,
+      unitOfWork: container.unitOfWork,
       passwordHasher: container.passwordHasher,
     }),
     loginAccount: LoginAccountUseCase({

@@ -88,6 +88,7 @@ describe('environment configuration', () => {
     JWT_PRIVATE_KEY: 'private',
     JWT_PUBLIC_KEY: 'public',
     JWT_KID: 'key-1',
+    EVENT_DELIVERY_TOKEN: 'test-delivery-token',
   }
 
   test('applies defaults and converts numeric environment values', () => {

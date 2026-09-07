@@ -1,8 +1,11 @@
 import { createApp } from '@/app'
 import { createContainer } from '@/container'
+import { createIntegrationEventsModule } from '@/modules/integration-events/integration-events.module'
 
 const container = await createContainer()
-const app = createApp(container).listen(container.env.PORT)
+const integrationEvents = createIntegrationEventsModule(container)
+const app = createApp(container, integrationEvents).listen(container.env.PORT)
+integrationEvents.publisher.start()
 
 container.logger.info('Server started', {
   url: `http://${app.server?.hostname}:${app.server?.port}`,
@@ -12,6 +15,7 @@ container.logger.info('Server started', {
 const shutdown = async (signal: string) => {
   container.logger.info('Shutting down', { signal })
 
+  await integrationEvents.publisher.stop()
   await app.stop()
   await container.sql.close()
 

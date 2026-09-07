@@ -1,22 +1,26 @@
-import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
 import type { RegisterBody } from '@/modules/auth/schemas/auth.schemas'
+import { createAccountCreatedEvent } from '@/modules/integration-events/events'
+import type { AuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
 import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
 import { normalizeEmail } from '@/shared/utils/normalizer'
 
 interface RegisterAccountDeps {
-  authRepository: AuthRepository
+  unitOfWork: AuthUnitOfWork
   passwordHasher: PasswordHasher
 }
 
 export const RegisterAccountUseCase = ({
-  authRepository,
+  unitOfWork,
   passwordHasher,
 }: RegisterAccountDeps) =>
   async (input: RegisterBody): Promise<void> => {
     const email = normalizeEmail(input.email)
     const passwordHash = await passwordHasher.hash(input.password)
 
-    await authRepository.insert({ email, passwordHash })
+    await unitOfWork.run(async ({ authAccounts, outboxEvents }) => {
+      const account = await authAccounts.insert({ email, passwordHash })
+      await outboxEvents.insert(createAccountCreatedEvent(account.id), account.id)
+    })
   }
 
 export type RegisterAccount = ReturnType<typeof RegisterAccountUseCase>

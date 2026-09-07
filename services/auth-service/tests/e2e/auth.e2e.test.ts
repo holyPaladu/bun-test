@@ -48,7 +48,6 @@ const createContext = (): TestContext => {
       alg: 'ES256', use: 'sig',
     },
   }
-
   const container: Container = {
     sql: database.sql,
     logger: silentLogger,
@@ -71,6 +70,8 @@ const createContext = (): TestContext => {
       JWT_EXPIRES_IN: '15m',
       REFRESH_TOKEN_TTL_DAYS: 30,
       SESSION_ABSOLUTE_TTL_DAYS: 90,
+      USER_EVENTS_URL: 'http://user-service/internal/events',
+      EVENT_DELIVERY_TOKEN: 'test-delivery-token',
       LOG_LEVEL: 'error',
     },
   }
@@ -121,6 +122,7 @@ describe('auth service HTTP e2e', () => {
     const health = await call(context, '/health/check')
     const ready = await call(context, '/health/db-ready')
     const jwks = await call(context, '/.well-known/jwks.json')
+    const metrics = await call(context, '/metrics')
 
     expect(health.status).toBe(200)
     expect(await json(health)).toEqual({ status: 'ok' })
@@ -128,6 +130,8 @@ describe('auth service HTTP e2e', () => {
     expect(await json(jwks)).toEqual({ keys: [expect.objectContaining({
       kid: 'test-key', alg: 'ES256', use: 'sig',
     })] })
+    expect(metrics.status).toBe(200)
+    expect(await metrics.text()).toContain('auth_outbox_pending_events 0')
   })
 
   test('registers a normalized auth account and validates request bodies', async () => {
@@ -142,6 +146,10 @@ describe('auth service HTTP e2e', () => {
     })
     expect(context.database.authAccounts[0]).toMatchObject({
       email, password_hash: `hashed:${password}`,
+    })
+    expect(context.database.outboxEvents[0]).toMatchObject({
+      event_type: 'auth.account-created.v1',
+      aggregate_id: context.database.authAccounts[0].id,
     })
 
     const invalid = await call(context, '/api/auth/register', {

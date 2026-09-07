@@ -22,11 +22,12 @@ export interface Container {
  */
 export const createContainer = async (env: Env = loadEnv()): Promise<Container> => {
   const sql = createDatabaseClient(env)
+  const logger = createLogger(env)
 
   return {
     env,
     sql,
-    logger: createLogger(env),
+    logger,
     passwordHasher: argon2PasswordHasher,
     jwtSigner: await JwtSigner(env.JWT_PRIVATE_KEY, env.JWT_KID, {
       expiresIn: env.JWT_EXPIRES_IN,

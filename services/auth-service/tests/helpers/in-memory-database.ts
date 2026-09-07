@@ -2,6 +2,21 @@ import type { DatabaseClient } from '@/shared/database/client'
 import type { RefreshTokenRow } from '@/modules/session/entities/refresh.entity'
 import type { SessionRow, SessionRevokedReason } from '@/modules/session/entities/session.entity'
 import type { AuthAccountRow } from '@/modules/auth/entities/auth-account.entity'
+import type { IntegrationEvent } from '@/modules/integration-events/events'
+
+export interface InMemoryOutboxEvent {
+  id: string
+  event_type: string
+  aggregate_id: string
+  payload: IntegrationEvent
+  occurred_at: Date
+  attempt_count: number
+  next_attempt_at: Date
+  locked_until: Date | null
+  published_at: Date | null
+  dead_lettered_at: Date | null
+  last_error: string | null
+}
 
 const normalizeQuery = (parts: TemplateStringsArray) =>
   parts.join('?').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -13,12 +28,14 @@ export interface InMemoryDatabase {
   authAccounts: AuthAccountRow[]
   sessions: SessionRow[]
   refreshTokens: RefreshTokenRow[]
+  outboxEvents: InMemoryOutboxEvent[]
 }
 
 export const createInMemoryDatabase = (): InMemoryDatabase => {
   const authAccounts: AuthAccountRow[] = []
   const sessions: SessionRow[] = []
   const refreshTokens: RefreshTokenRow[] = []
+  const outboxEvents: InMemoryOutboxEvent[] = []
   let sequence = 1
 
   const id = () => `00000000-0000-4000-8000-${(sequence++).toString(16).padStart(12, '0')}`
@@ -40,6 +57,86 @@ export const createInMemoryDatabase = (): InMemoryDatabase => {
       }
       authAccounts.push(row)
       return Promise.resolve([clone(row)])
+    }
+
+    if (text.startsWith('insert into outbox_events')) {
+      const row: InMemoryOutboxEvent = {
+        id: values[0] as string,
+        event_type: values[1] as string,
+        aggregate_id: values[2] as string,
+        payload: JSON.parse(values[3] as string) as IntegrationEvent,
+        occurred_at: values[4] as Date,
+        attempt_count: 0,
+        next_attempt_at: now,
+        locked_until: null,
+        published_at: null,
+        dead_lettered_at: null,
+        last_error: null,
+      }
+      outboxEvents.push(row)
+      return Promise.resolve([])
+    }
+
+    if (text.startsWith('with candidates as') && text.includes('update outbox_events')) {
+      const [batchSize, leaseMs] = values as [number, number]
+      const claimed = outboxEvents
+        .filter(event => event.published_at === null && event.dead_lettered_at === null)
+        .filter(event => event.next_attempt_at <= now)
+        .filter(event => event.locked_until === null || event.locked_until <= now)
+        .sort((a, b) => a.next_attempt_at.getTime() - b.next_attempt_at.getTime())
+        .slice(0, batchSize)
+      for (const event of claimed) {
+        event.attempt_count += 1
+        event.locked_until = new Date(now.getTime() + leaseMs)
+      }
+      return Promise.resolve(clone(claimed))
+    }
+
+    if (text.startsWith('update outbox_events') && text.includes('set published_at = now()')) {
+      const event = outboxEvents.find(row => row.id === values[0])
+      if (event && !event.dead_lettered_at) {
+        event.published_at = now
+        event.locked_until = null
+        event.last_error = null
+      }
+      return Promise.resolve([])
+    }
+
+    if (text.startsWith('update outbox_events') && text.includes('set next_attempt_at = ?')) {
+      const [nextAttemptAt, lastError, eventId] = values as [Date, string, string]
+      const event = outboxEvents.find(row => row.id === eventId)
+      if (event && !event.published_at && !event.dead_lettered_at) {
+        event.next_attempt_at = nextAttemptAt
+        event.locked_until = null
+        event.last_error = lastError
+      }
+      return Promise.resolve([])
+    }
+
+    if (text.startsWith('update outbox_events') && text.includes('set dead_lettered_at = now()')) {
+      const [lastError, eventId] = values as [string, string]
+      const event = outboxEvents.find(row => row.id === eventId)
+      if (event && !event.published_at && !event.dead_lettered_at) {
+        event.dead_lettered_at = now
+        event.locked_until = null
+        event.last_error = lastError
+      }
+      return Promise.resolve([])
+    }
+
+    if (text.includes('as oldest_pending_age_seconds') && text.includes('from outbox_events')) {
+      const pending = outboxEvents.filter(row => !row.published_at && !row.dead_lettered_at)
+      const oldest = pending.reduce<Date | null>(
+        (value, row) => value === null || row.occurred_at < value ? row.occurred_at : value,
+        null,
+      )
+      return Promise.resolve([{
+        pending: String(pending.length),
+        dead_lettered: String(outboxEvents.filter(row => row.dead_lettered_at).length),
+        oldest_pending_age_seconds: oldest
+          ? Math.max(0, (now.getTime() - oldest.getTime()) / 1000)
+          : 0,
+      }])
     }
 
     if (text.includes('from auth_accounts') && text.includes('where email = ?')) {
@@ -182,5 +279,5 @@ export const createInMemoryDatabase = (): InMemoryDatabase => {
   const sql = query as unknown as DatabaseClient
   sql.begin = (async (callback: (transaction: DatabaseClient) => unknown) => callback(sql)) as typeof sql.begin
 
-  return { sql, authAccounts, sessions, refreshTokens }
+  return { sql, authAccounts, sessions, refreshTokens, outboxEvents }
 }

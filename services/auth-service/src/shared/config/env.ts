@@ -21,6 +21,12 @@ const envSchema = t.Object({
   REFRESH_TOKEN_TTL_DAYS: t.Number({ default: 30, minimum: 1 }),
   /** Абсолютный срок жизни сессии, который не продлевается при refresh-ротации. */
   SESSION_ABSOLUTE_TTL_DAYS: t.Number({ default: 90, minimum: 1 }),
+  /** Защищённый internal endpoint user-service для at-least-once outbox delivery. */
+  USER_EVENTS_URL: t.String({
+    default: 'http://localhost:3001/internal/events',
+    format: 'uri',
+  }),
+  EVENT_DELIVERY_TOKEN: t.String({ minLength: 16 }),
   LOG_LEVEL: t.Union(
     [t.Literal('debug'), t.Literal('info'), t.Literal('warn'), t.Literal('error')],
     { default: 'info' },

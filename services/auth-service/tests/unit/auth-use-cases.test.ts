@@ -5,6 +5,8 @@ import { LoginAccountUseCase } from '@/modules/auth/use-cases/login-account'
 import { RegisterAccountUseCase } from '@/modules/auth/use-cases/register-account'
 import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
 import { AuthAccountBlockedError, UnauthorizedError } from '@/shared/errors/app-error'
+import { createInMemoryDatabase } from '../helpers/in-memory-database'
+import { createAuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
 
 const activeAccount = (overrides: Partial<AuthAccount> = {}): AuthAccount => ({
   id: '00000000-0000-4000-8000-000000000001',
@@ -31,30 +33,51 @@ const hasher = (valid = true): PasswordHasher => ({
 
 describe('RegisterAccountUseCase', () => {
   test('normalizes the email, hashes the password, and stores no plaintext', async () => {
-    const repo = repository()
+    const database = createInMemoryDatabase()
     const passwordHasher = hasher()
-    const register = RegisterAccountUseCase({ authRepository: repo, passwordHasher })
+    const register = RegisterAccountUseCase({
+      unitOfWork: createAuthUnitOfWork(database.sql),
+      passwordHasher,
+    })
 
     await register({ email: '  USER@Example.COM ', password: 'secret-123' })
 
     expect(passwordHasher.hash).toHaveBeenCalledWith('secret-123')
-    expect(repo.insert).toHaveBeenCalledWith({
-      email: 'user@example.com',
-      passwordHash: 'hashed:secret-123',
+    expect(database.authAccounts[0]).toMatchObject({
+      email: 'user@example.com', password_hash: 'hashed:secret-123',
+    })
+    expect(database.outboxEvents).toHaveLength(1)
+    expect(database.outboxEvents[0]).toMatchObject({
+      event_type: 'auth.account-created.v1',
+      aggregate_id: database.authAccounts[0].id,
+      payload: {
+        type: 'auth.account-created.v1',
+        data: { userId: database.authAccounts[0].id },
+      },
+    })
+    expect(database.outboxEvents[0].payload).toEqual({
+      eventId: expect.any(String),
+      type: 'auth.account-created.v1',
+      occurredAt: expect.any(String),
+      data: { userId: database.authAccounts[0].id },
     })
   })
 
   test('does not insert when password hashing fails', async () => {
-    const repo = repository()
+    const database = createInMemoryDatabase()
     const passwordHasher: PasswordHasher = {
       hash: mock(async () => { throw new Error('hash failed') }),
       verify: mock(async () => false),
     }
-    const register = RegisterAccountUseCase({ authRepository: repo, passwordHasher })
+    const register = RegisterAccountUseCase({
+      unitOfWork: createAuthUnitOfWork(database.sql),
+      passwordHasher,
+    })
 
     await expect(register({ email: 'user@example.com', password: 'secret-123' }))
       .rejects.toThrow('hash failed')
-    expect(repo.insert).not.toHaveBeenCalled()
+    expect(database.authAccounts).toHaveLength(0)
+    expect(database.outboxEvents).toHaveLength(0)
   })
 })
 

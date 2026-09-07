@@ -1,6 +1,7 @@
 import { AuthRepository } from '@/modules/auth/repo/auth.repository'
 import { RefreshTokenRepository } from '@/modules/session/repo/refresh-token.repository'
 import { SessionRepository } from '@/modules/session/repo/session.repository'
+import { OutboxRepository } from '@/modules/integration-events/outbox.repository'
 import type { DatabaseClient } from '@/shared/database/client'
 
 /** Репозитории, привязанные к одной DB-транзакции auth-service. */
@@ -8,6 +9,7 @@ export interface AuthTransactionRepositories {
   authAccounts: AuthRepository
   refreshTokens: RefreshTokenRepository
   sessions: SessionRepository
+  outboxEvents: OutboxRepository
 }
 
 /** Application port: use cases не знают ни про Bun SQL, ни про repo factories. */
@@ -23,5 +25,6 @@ export const createAuthUnitOfWork = (sql: DatabaseClient): AuthUnitOfWork => ({
     authAccounts: AuthRepository(transaction),
     refreshTokens: RefreshTokenRepository(transaction),
     sessions: SessionRepository(transaction),
+    outboxEvents: OutboxRepository(transaction),
   })),
 })
