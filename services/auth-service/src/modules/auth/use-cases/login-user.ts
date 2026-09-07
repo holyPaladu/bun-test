@@ -4,6 +4,7 @@ import type { Meta } from '@/shared/types/meta.type'
 import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
 import type { LoginBody, LoginResponse } from '@/modules/auth/schemas/auth.schemas'
 import type { IssueTokens } from '@/modules/session/use-cases/issue-tokens'
+import { normalizeEmail } from '@/shared/utils/normalizer'
 
 interface LoginUserDeps {
   authRepository: AuthRepository
@@ -13,7 +14,8 @@ interface LoginUserDeps {
 
 export const LoginUserUseCase = ({ authRepository, passwordHasher, issueTokens }: LoginUserDeps) =>
   async (input: LoginBody, meta: Meta): Promise<LoginResponse> => {
-    const existUser = await authRepository.findByEmail(input.email)
+    const email = normalizeEmail(input.email)
+    const existUser = await authRepository.findByEmail(email)
     if (!existUser) throw new UnauthorizedError()
 
     if (existUser.status !== 'active') throw new UserBlockedError()

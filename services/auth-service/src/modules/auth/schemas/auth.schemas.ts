@@ -33,8 +33,8 @@ export type voidResponse = typeof voidResponseSchema.static
 // =================================
 
 export const registerBodySchema = t.Object({
-  email: t.String({ format: 'email' }),
-  password: t.String({ minLength: 8 }),
+  email: t.String({ format: 'email', minLength: 3, maxLength: 254 }),
+  password: t.String({ minLength: 8, maxLength: 128 }),
 })
 
 export type RegisterBody = typeof registerBodySchema.static
@@ -47,8 +47,8 @@ export type RegisterResponse = typeof registerResponseSchema.static
 
 
 export const loginBodySchema = t.Object({
-  email: t.String({ format: 'email' }),
-  password: t.String({ minLength: 8 }),
+  email: t.String({ format: 'email', minLength: 3, maxLength: 254 }),
+  password: t.String({ minLength: 8, maxLength: 128 }),
 })
 
 export type LoginBody = typeof loginBodySchema.static
@@ -74,10 +74,9 @@ export const refreshTokenResponseSchema = t.Object({
 export type RefreshTokenResponse = typeof refreshTokenResponseSchema.static
 
 export const paginationBodySchema = t.Object({
-  perPage: t.Number(),
-  page: t.Number()
+  perPage: t.Integer({ minimum: 1, maximum: 100, default: 10 }),
+  page: t.Integer({ minimum: 1, default: 1 }),
 })
-
 export type PaginationBody = typeof paginationBodySchema.static
 
 export const getSessionsResponseSchema = t.Object({
@@ -93,8 +92,8 @@ export const getSessionsResponseSchema = t.Object({
 export type GetSessionsResponse = typeof getSessionsResponseSchema.static
 
 export const changePasswordBodySchema = t.Object({
-  oldPassword: t.String({ minLength: 8 }),
-  newPassword: t.String({ minLength: 8 }),
+  oldPassword: t.String({ minLength: 8, maxLength: 128 }),
+  newPassword: t.String({ minLength: 8, maxLength: 128 }),
 })
 export type changePasswordBody = typeof changePasswordBodySchema.static
 
