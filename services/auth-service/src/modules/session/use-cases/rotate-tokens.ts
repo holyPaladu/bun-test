@@ -55,7 +55,7 @@ export const RotateTokensUseCase = ({
       if (!user) throw new NotFoundError('User')
       if (user.status !== 'active') throw new UserBlockedError()
 
-      const accessToken = await jwtSigner.sign({ userId: storedToken.userId })
+      const accessToken = await jwtSigner.sign({ subject: storedToken.userId, sessionId: session.id })
       const newRefreshToken = refreshTokenGenerator.generate()
       const token = await tokenRepo.insert({
         sessionId: session.id,

@@ -36,7 +36,7 @@ export const IssueTokensUseCase = ({
     const session = await sessionRepository.insert({ userId, absoluteExpiresAt, ...meta })
 
     const [accessToken, refreshToken] = await Promise.all([
-      jwtSigner.sign({ userId }),
+      jwtSigner.sign({ subject: userId, sessionId: session.id }),
       (async () => {
         const refreshToken = refreshTokenGenerator.generate()
         await refreshTokenRepository.insert({

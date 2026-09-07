@@ -5,6 +5,7 @@ import type { JwtVerifier } from '@/shared/lib/jwt/jwt-verifier'
 /** Ровно то, что IssueTokensUseCase кладёт в access-token (см. issue-tokens.ts). */
 export interface AuthGuardUser {
   userId: string
+  sessionId: string
 }
 
 /**
@@ -20,7 +21,8 @@ export const createAuthGuard = (jwtVerifier: JwtVerifier) =>
       if (scheme !== 'Bearer' || !token) throw new UnauthorizedError('Missing bearer token')
 
       try {
-        return { user: (await jwtVerifier.verify(token)) as unknown as AuthGuardUser }
+        const payload = await jwtVerifier.verify(token)
+        return { user: { userId: payload.sub, sessionId: payload.sid } satisfies AuthGuardUser }
       } catch {
         throw new UnauthorizedError('Invalid or expired token')
       }

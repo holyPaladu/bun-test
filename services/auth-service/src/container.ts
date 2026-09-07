@@ -23,6 +23,13 @@ export const createContainer = async (env: Env = loadEnv()): Promise<Container> 
   sql: createDatabaseClient(env),
   logger: createLogger(env),
   passwordHasher: argon2PasswordHasher,
-  jwtSigner: await JwtSigner(env.JWT_PRIVATE_KEY, env.JWT_KID, { expiresIn: env.JWT_EXPIRES_IN }),
-  jwtVerifier: await JwtVerifier(env.JWT_PUBLIC_KEY, env.JWT_KID),
+  jwtSigner: await JwtSigner(env.JWT_PRIVATE_KEY, env.JWT_KID, {
+    expiresIn: env.JWT_EXPIRES_IN,
+    issuer: env.JWT_ISSUER,
+    audience: env.JWT_AUDIENCE,
+  }),
+  jwtVerifier: await JwtVerifier(env.JWT_PUBLIC_KEY, env.JWT_KID, {
+    issuer: env.JWT_ISSUER,
+    audience: env.JWT_AUDIENCE,
+  }),
 })

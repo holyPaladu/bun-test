@@ -13,6 +13,9 @@ const envSchema = t.Object({
   /** base64(SPKI PEM), пара к JWT_PRIVATE_KEY — не секрет, отдаётся на /.well-known/jwks.json. */
   JWT_PUBLIC_KEY: t.String({ minLength: 1 }),
   JWT_KID: t.String({ minLength: 1 }),
+  /** Проверяются verifier-ом и не позволяют принять токен другого issuer/назначения. */
+  JWT_ISSUER: t.String({ default: 'auth-service', minLength: 1 }),
+  JWT_AUDIENCE: t.String({ default: 'api', minLength: 1 }),
   JWT_EXPIRES_IN: t.String({ default: '15m' }),
   /** Срок жизни refresh-токена в днях — сам токен не JWT, expiry считается вручную. */
   REFRESH_TOKEN_TTL_DAYS: t.Number({ default: 30, minimum: 1 }),
