@@ -15,7 +15,17 @@ export const openapiPlugin = openapi({
     info: {
       title: 'Auth Service',
       version: '1.0.0',
-    }
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Access-token из /auth/login или /auth/refresh-token.',
+        },
+      },
+    },
   },
   scalar: {
     theme: 'dark',

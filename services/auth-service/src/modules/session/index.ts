@@ -5,6 +5,7 @@ import { RefreshTokenRepository } from '@/modules/session/repo/refresh-token.rep
 import { IssueTokensUseCase } from '@/modules/session/use-cases/issue-tokens'
 import { RotateTokensUseCase } from '@/modules/session/use-cases/rotate-tokens'
 import { LogoutUseCase } from '@/modules/session/use-cases/logout'
+import { LogoutAllUseCase } from '@/modules/session/use-cases/logout-all'
 import { refreshTokenGenerator } from '@/shared/lib/token/refresh-token'
 
 /**
@@ -38,6 +39,9 @@ export const SessionModule = (
     logout: LogoutUseCase({
       sql: container.sql,
       refreshTokenGenerator,
+    }),
+    logoutAll: LogoutAllUseCase({
+      sql: container.sql,
     }),
   }
 }

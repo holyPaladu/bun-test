@@ -1,16 +1,21 @@
 import { Elysia } from 'elysia'
 import { ErrorResponseSchemas } from '@/shared/errors/error-response.schema'
+import { createAuthGuard } from '@/shared/http/guard/auth.guard'
+import type { JwtVerifier } from '@/shared/lib/jwt/jwt-verifier'
 import { AuthSchemas } from '@/modules/auth/schemas/auth.schemas'
 import type { LoginUser } from '@/modules/auth/use-cases/login-user'
 import type { RegisterUser } from '@/modules/auth/use-cases/register-user'
 import type { RotateTokens } from '@/modules/session/use-cases/rotate-tokens'
 import type { Logout } from '@/modules/session/use-cases/logout'
+import type { LogoutAll } from '@/modules/session/use-cases/logout-all'
 
 export interface AuthRoutesDeps {
   registerUser: RegisterUser
   loginUser: LoginUser
   refreshToken: RotateTokens
   logout: Logout
+  logoutAll: LogoutAll
+  jwtVerifier: JwtVerifier
 }
 
 export const AuthRoutes = (deps: AuthRoutesDeps) =>
@@ -85,4 +90,23 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
           422: 'errorResponseSchema',
         },
       }
+    )
+    .group('', app => app
+      .use(createAuthGuard(deps.jwtVerifier))
+      .post(
+        '/logout-all',
+        async ({ user }) => {
+          await deps.logoutAll(user.userId)
+          return { message: 'Logged out from all sessions successfully' }
+        },
+        {
+          response: {
+            200: 'registerResponseSchema',
+            401: 'errorResponseSchema',
+          },
+          detail: {
+            security: [{ bearerAuth: [] }],
+          },
+        }
+      )
     )

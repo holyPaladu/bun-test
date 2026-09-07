@@ -1,4 +1,4 @@
-export type SessionRevokedReason = 'logout' | 'reuse_detected' | 'session_limit'
+export type SessionRevokedReason = 'logout' | 'logout_all' | 'reuse_detected' | 'session_limit'
 
 export interface Session {
   id: string

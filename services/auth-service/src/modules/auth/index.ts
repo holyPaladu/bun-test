@@ -14,7 +14,7 @@ import { SessionModule } from '@/modules/session'
  * сюда приходят готовыми use-case'ами; auth отвечает только за идентичность
  * (регистрация, проверка пароля при логине).
  */
-export const AuthModule = (container: Pick<Container, 'sql' | 'passwordHasher' | 'jwtSigner' | 'env'>) => {
+export const AuthModule = (container: Pick<Container, 'sql' | 'passwordHasher' | 'jwtSigner' | 'jwtVerifier' | 'env'>) => {
   const authRepository = AuthRepository(container.sql)
   const session = SessionModule({ ...container, authRepository })
 
@@ -30,6 +30,8 @@ export const AuthModule = (container: Pick<Container, 'sql' | 'passwordHasher' |
     }),
     refreshToken: session.rotateTokens,
     logout: session.logout,
+    logoutAll: session.logoutAll,
+    jwtVerifier: container.jwtVerifier,
   }
 
   return AuthRoutes(usecase)

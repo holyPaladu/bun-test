@@ -6,6 +6,7 @@ export interface SessionRepository {
   insert(input: { userId: string; ip: string | null; userAgent: string | null }): Promise<Session>
   findById(id: string): Promise<Session | null>
   revoke(id: string, reason: SessionRevokedReason): Promise<void>
+  revokeAllByUserId(userId: string, reason: SessionRevokedReason): Promise<void>
   touch(id: string, meta: { ip: string | null; userAgent: string | null }): Promise<void>
 }
 
@@ -33,6 +34,14 @@ export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
       UPDATE sessions
       SET revoked_at = NOW(), revoked_reason = ${reason}
       WHERE id = ${id} AND revoked_at IS NULL
+    `
+  },
+
+  revokeAllByUserId: async (userId, reason) => {
+    await sql`
+      UPDATE sessions
+      SET revoked_at = NOW(), revoked_reason = ${reason}
+      WHERE user_id = ${userId} AND revoked_at IS NULL
     `
   },
 
