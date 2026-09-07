@@ -8,6 +8,7 @@ export interface AuthRepository {
   insert(input: { email: string; passwordHash: string }): Promise<Partial<User>>
   findByEmail(email: string): Promise<User | null>
   findById(id: string): Promise<User | null>
+  setNewPasswordHash(userId: string, newPassHash: string, oldPassHash: string): Promise<boolean>
 }
 
 /** Postgres-специфичные детали (коды ошибок) не выходят за пределы репозитория. */
@@ -42,5 +43,16 @@ export const AuthRepository = (sql: DatabaseClient): AuthRepository => ({
       WHERE id = ${id}
     `
     return row ? toUser(row) : null
+  },
+
+  setNewPasswordHash: async (userId, newPassHash, oldPassHash) => {
+    const [row] = await sql<Pick<User, 'id'>[]>`
+      UPDATE users
+      SET password_hash = ${newPassHash}, updated_at = NOW()
+      WHERE id = ${userId} AND password_hash = ${oldPassHash}
+      RETURNING ida
+    `
+
+    return !!row
   }
 })

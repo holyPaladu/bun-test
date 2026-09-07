@@ -4,6 +4,7 @@ export const SESSION_REVOKED_REASONS = [
     'logout_all',       // выход со всех устройств
     'reuse_detected',   // обнаружено повторное использование refresh token
     'session_limit',    // удалена из-за лимита сессий
+    'password_change'   // изменение после смены пароля
   ] as const
 
 export type SessionRevokedReason =

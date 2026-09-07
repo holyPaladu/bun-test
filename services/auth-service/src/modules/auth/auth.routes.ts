@@ -10,6 +10,7 @@ import type { Logout } from '@/modules/session/use-cases/logout'
 import type { LogoutAll } from '@/modules/session/use-cases/logout-all'
 import { GetSessions } from '../session/use-cases/get-sessions'
 import { RevokeSessionByUserId } from '../session/use-cases/revoke-session-by-user-id'
+import { ChangePassword } from './use-cases/change-password'
 
 export interface AuthRoutesDeps {
   registerUser: RegisterUser
@@ -20,6 +21,7 @@ export interface AuthRoutesDeps {
   jwtVerifier: JwtVerifier
   getSessions: GetSessions
   revokeSessionByUserId: RevokeSessionByUserId
+  changePasswordInside: ChangePassword
 }
 
 export const AuthRoutes = (deps: AuthRoutesDeps) =>
@@ -154,6 +156,20 @@ export const AuthRoutes = (deps: AuthRoutesDeps) =>
           detail: {
             security: [{ bearerAuth: [] }],
           },
+        }
+      )
+      .put(
+        '/change-password',
+        async ({ user, body }) => {
+          return deps.changePasswordInside(user.userId, body)
+        },
+        {
+          body: 'changePasswordBodySchema',
+          response: {
+            204: 'voidResponseSchema',
+            401: 'errorResponseSchema',
+            422: 'errorResponseSchema'
+          }
         }
       )
     )

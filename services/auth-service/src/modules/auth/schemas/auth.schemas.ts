@@ -91,6 +91,12 @@ export const getSessionsResponseSchema = t.Object({
 
 export type GetSessionsResponse = typeof getSessionsResponseSchema.static
 
+export const changePasswordBodySchema = t.Object({
+  oldPassword: t.String({ minLength: 8 }),
+  newPassword: t.String({ minLength: 8 }),
+})
+export type changePasswordBody = typeof changePasswordBodySchema.static
+
 export const AuthSchemas = {
   messageResponseSchema,
   paramsIdSchema,
@@ -104,4 +110,5 @@ export const AuthSchemas = {
   refreshTokenResponseSchema,
   paginationBodySchema,
   getSessionsResponseSchema,
+  changePasswordBodySchema,
 }

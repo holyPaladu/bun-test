@@ -4,6 +4,7 @@ import { AuthRoutes } from '@/modules/auth/auth.routes'
 import { LoginUserUseCase } from '@/modules/auth/use-cases/login-user'
 import { RegisterUserUseCase } from '@/modules/auth/use-cases/register-user'
 import { SessionModule } from '@/modules/session'
+import { ChangePasswordUseCase } from './use-cases/change-password'
 
 /**
  * Публичный вход в модуль: собирает репозиторий, use-case'ы и роуты
@@ -33,7 +34,12 @@ export const AuthModule = (container: Pick<Container, 'sql' | 'passwordHasher' |
     logoutAll: session.logoutAll,
     jwtVerifier: container.jwtVerifier,
     getSessions: session.getSessions,
-    revokeSessionByUserId: session.revokeSessionByUserId
+    revokeSessionByUserId: session.revokeSessionByUserId,
+    changePasswordInside: ChangePasswordUseCase({
+      sql: container.sql,
+      authRepo: authRepository,
+      passwordHasher: container.passwordHasher
+    })
   }
 
   return AuthRoutes(usecase)
