@@ -3,10 +3,15 @@
 Сервис аутентификации на Bun + Elysia. Владеет учётными записями
 (`auth_accounts`), login email, password hash, статусом доступа, сессиями и
 refresh-токенами. Пользовательские профили принадлежат отдельному
-`user-service`.
+`user-service`. Регистрация атомарно пишет `auth.account-created.v1` в
+PostgreSQL outbox; фоновый publisher доставляет событие в `user-service`.
 
 Feature-модули собираются в явно названных `*.module.ts`; `index.ts` не содержит
 composition logic. Общий `container.ts` предоставляет только runtime-инфраструктуру.
+
+Межсервисные контракты и механизм их доставки собраны в плоском модуле
+`modules/integration-events`. Он не содержит auth-бизнес-правила: use case
+регистрации только кладёт событие в outbox внутри своей транзакции.
 
 ## Запуск
 
@@ -46,12 +51,35 @@ Production-сборка проходит обязательный quality gate: 
 | Метод | Путь | Описание |
 |---|---|---|
 | `GET` | `/health/check` | Проверка живости |
+| `GET` | `/metrics` | Outbox delivery/lag/pending/DLQ в формате Prometheus |
 | `POST` | `/api/auth/register` | Регистрация: 201 / 409 / 422 |
 
 После миграции `0006_rename_users_to_auth_accounts.sql` доменная сущность и
 таблица называются `AuthAccount`/`auth_accounts`, а статус входа —
 `authStatus`/`auth_status`. `sessions.user_id` и `refresh_tokens.user_id`
 продолжают ссылаться на канонический UUID учётной записи.
+
+## Outbox и повторная доставка
+
+Publisher забирает события lease-пакетами через `FOR UPDATE SKIP LOCKED` и
+доставляет их at-least-once на `USER_EVENTS_URL`. `EVENT_DELIVERY_TOKEN` должен
+совпадать с `EVENT_CONSUMER_TOKEN` user-service. Сетевые ошибки и ответы не-2xx
+получают экспоненциальную задержку от 1 секунды до 5 минут; после 10 попыток
+событие переходит в DLQ. Эти значения собраны в одной `OUTBOX_POLICY` внутри
+`integration-events.module.ts`, а не размазаны по environment.
+
+Перед ручным replay сначала устранить причину и проверить `last_error`. Возврат
+конкретного события из DLQ безопасен, поскольку consumer идемпотентен:
+
+```sql
+UPDATE outbox_events
+SET dead_lettered_at = NULL,
+    attempt_count = 0,
+    next_attempt_at = now(),
+    locked_until = NULL,
+    last_error = NULL
+WHERE id = '<event-uuid>' AND published_at IS NULL;
+```
 
 Формат ошибки одинаков для всех эндпоинтов:
 

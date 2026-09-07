@@ -1,16 +1,17 @@
 # План выделения `user-service` из `auth-service`
 
-Статус: готовы этап 1, профильный MVP этапа 2 и этап 3. В `user-service`
-реализованы remote JWKS verifier, отдельная миграция/репозиторий, lazy bootstrap
-и защищённые `GET/PATCH /api/users/me`; в `auth-service` сущность и таблица
-переименованы в `AuthAccount`/`auth_accounts`. Outbox, backfill и
-deployment-разделение остаются следующими этапами.
+Статус: готовы этапы 1–4. В `user-service` реализованы remote JWKS verifier,
+отдельная миграция/репозиторий и inbox consumer вместо lazy bootstrap, а
+`GET/PATCH /api/users/me` защищены JWT; в
+`auth-service` сущность и таблица переименованы в `AuthAccount`/`auth_accounts`,
+регистрация пишет transactional outbox. Остаётся deployment-разделение этапа 5.
 
 ### Соглашение о сборке модулей
 
 Файл, который собирает repository, use cases и HTTP routes feature-модуля,
-называется явно: `auth.module.ts`, `session.module.ts` или
-`user-profile.module.ts` и экспортирует фабрику `create*Module`.
+называется явно: `auth.module.ts`, `session.module.ts`,
+`user-profile.module.ts` или `integration-events.module.ts` и экспортирует
+фабрику `create*Module`.
 
 `index.ts` для composition root не используется: импорт каталога скрывает, что
 создаётся runtime-модуль. `index.ts` допустим только как простой barrel без
@@ -347,10 +348,15 @@ outbox и успешной сверки данных lazy bootstrap нужно �
 ## Миграция существующих данных
 
 Сейчас в auth-таблице нет профильных полей, поэтому переносить PII между таблицами
-не требуется. Нужно создать по пустому профилю для каждого существующего
-`auth_accounts.id`.
+не требуется. Для чистого развёртывания backfill не нужен: все новые accounts
+сразу получают outbox event.
 
-Один раз запускается backfill job, который:
+Если перед rollout уже существуют ценные `auth_accounts`, для них нужно один раз
+создать пустые профили. Это deployment-задача, а не возможность runtime-сервиса.
+До появления реального production dataset отдельный backfill-скрипт в репозитории
+не хранится.
+
+При необходимости одноразовая job должна:
 
 1. читает UUID из auth database страницами;
 2. пишет их в users database через отдельное подключение;
@@ -360,7 +366,7 @@ outbox и успешной сверки данных lazy bootstrap нужно �
 5. после backfill повторно проигрывает outbox-события, появившиеся во время
    миграции.
 
-Это единственное место, где процесс временно имеет read credentials auth DB и
+Это единственное место, где процесс временно получает read credentials auth DB и
 write credentials users DB. Оба секрета выдаются job, а не runtime-контейнерам.
 
 ## Порядок реализации
@@ -399,12 +405,54 @@ write credentials users DB. Оба секрета выдаются job, а не 
 
 ### Этап 4. Добавить синхронизацию жизненного цикла
 
+Статус: выполнен. Пока в репозитории нет брокера, transport реализован как
+защищённая internal HTTP-доставка поверх PostgreSQL outbox с at-least-once
+семантикой. Inbox user-service делает повтор события успешным no-op.
+
 - transactional outbox в `auth-service`;
 - событие `auth.account-created.v1`;
 - idempotent consumer/inbox в `user-service`;
-- backfill существующих UUID;
+- отдельный backfill только при наличии существующих production accounts;
 - метрики задержки и dead-letter/retry policy;
 - после подтверждённой доставки убрать lazy bootstrap.
+
+Реализация также предоставляет `/metrics` с pending/DLQ, возрастом старейшего
+события и delivery lag. Publisher использует lease + `SKIP LOCKED`,
+экспоненциальные повторы и переводит событие в DLQ после настроенного лимита.
+Для чистого развёртывания backfill отсутствует как ненужная постоянная
+инфраструктура. Если перед rollout обнаружатся существующие accounts без
+профилей, одноразовая job проектируется под фактический объём и окружение.
+
+#### Структура `integration-events`
+
+Модуль назван по стабильной границе — событиям между сервисами, а не по первому
+сценарию `account-created`. Поэтому сюда без переименования модуля смогут войти
+будущие `account-blocked.v1` и `account-deleted.v1`.
+
+В `auth-service`:
+
+| Файл | Ответственность |
+|---|---|
+| `events.ts` | Версионированные исходящие контракты и общий `IntegrationEvent` union |
+| `outbox.repository.ts` | Только SQL хранения, lease и состояния доставки |
+| `outbox.publisher.ts` | HTTP transport и управление retry/DLQ |
+| `outbox.metrics.ts` | Счётчики доставки и Prometheus-представление |
+| `integration-events.module.ts` | Сборка publisher-а и технического `/metrics` route |
+
+В `user-service`:
+
+| Файл | Ответственность |
+|---|---|
+| `events.ts` | Runtime-схемы и общий discriminated union входящих событий |
+| `inbox.repository.ts` | Только идемпотентная reservation по `eventId` |
+| `process-integration-event.ts` | Явный dispatcher; для первого события — inbox + профиль |
+| `integration-events.routes.ts` | Аутентификация и HTTP-адаптер consumer-а |
+| `integration-events.module.ts` | Сборка зависимостей модуля |
+
+Структура намеренно плоская. Подкаталоги `handlers/`, `events/` или `repositories/`
+следует добавлять только когда файлов соответствующего типа станет несколько.
+Контракт события определён с обеих сторон намеренно: сервисы не импортируют код
+друг друга; совместимость закрепляется contract-тестами.
 
 Удаление account проектируется отдельно: auth сначала отзывает все сессии и
 публикует versioned event, после чего users удаляет или анонимизирует профиль.
@@ -414,7 +462,9 @@ write credentials users DB. Оба секрета выдаются job, а не 
 
 - добавить отдельную users database/роль и migration container в Compose;
 - добавить `user-service` на порту `3001`;
-- передать ему только `AUTH_JWKS_URL`, issuer и audience;
+- передать ему только `AUTH_JWKS_URL`, issuer, audience и internal consumer token;
+- передать auth-service только URL consumer-а и парный delivery token, без доступа
+  к users DB;
 - настроить service DNS/network policy: users может читать auth JWKS, auth не
   получает доступ к users DB;
 - разделить readiness: отсутствие соединения с собственной БД делает users

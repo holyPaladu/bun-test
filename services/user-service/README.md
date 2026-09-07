@@ -7,6 +7,10 @@
 Feature-модули собираются в явно названных `*.module.ts`; `index.ts` не содержит
 composition logic. Общий `container.ts` предоставляет только runtime-инфраструктуру.
 
+Все входящие межсервисные события собраны в плоском модуле
+`modules/integration-events`: контракты, inbox, dispatcher и HTTP-адаптер лежат
+рядом и не смешиваются с публичными profile routes.
+
 ## Локальный запуск
 
 ```bash
@@ -23,12 +27,26 @@ bun run dev
 
 - `GET /health/check` — liveness;
 - `GET /health/ready` — проверка соединения с users database;
-- `GET /api/users/me` — получить профиль; при отсутствии строки временно создаёт
-  пустой профиль по проверенному JWT `sub`;
+- `POST /internal/events` — защищённый consumer `auth.account-created.v1`;
+- `GET /api/users/me` — получить существующий профиль по проверенному JWT `sub`;
 - `PATCH /api/users/me` — изменить только `displayName`, `avatarUrl`, `locale` и
   `timezone`.
 
 OpenAPI UI доступен на `/swagger`, JSON-описание — на `/swagger/json`.
+
+Событие и inbox reservation обрабатываются в одной DB-транзакции. Повторная
+доставка того же `eventId` возвращает успешный no-op, поэтому publisher может
+безопасно повторить запрос после сетевого сбоя. Lazy bootstrap удалён: новые
+профили создаёт только consumer integration events.
+
+## Нужен ли backfill
+
+В коде постоянной backfill-job нет. Она не нужна для чистого развёртывания:
+каждая новая регистрация уже создаёт outbox event. Backfill требуется только
+один раз, если к моменту rollout в `auth_accounts` есть ценные существующие
+записи без профилей. В таком случае это отдельная deployment-операция с
+временными read credentials auth DB и write credentials users DB, а не часть
+runtime `user-service`.
 
 ## Проверки
 
@@ -38,5 +56,5 @@ bun test
 bun run build
 ```
 
-Lazy bootstrap является переходным механизмом до появления transactional outbox
-и consumer-а события `auth.account-created.v1`.
+Для внутреннего endpoint задайте `EVENT_CONSUMER_TOKEN` тем же случайным
+значением (не менее 16 символов), что и `EVENT_DELIVERY_TOKEN` auth-service.
