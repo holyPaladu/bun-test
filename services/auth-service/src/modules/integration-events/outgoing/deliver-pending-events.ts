@@ -1,11 +1,49 @@
-import { EventDeliveryHttpError, type SendEvent } from './http/send-event.http'
-import type {
-  ClaimedOutboxEvent,
-  OutboxDeliveryRepository,
-} from './repo/outbox.repository'
+import type { AccountCreatedV1 } from '@test-project/integration-event-contracts'
 import { getRetryDelayMs, shouldDeadLetter, type RetryPolicy } from './retry-policy'
 import type { DeliveryMetrics } from './metrics/delivery.metrics'
 import type { Logger } from '@/shared/lib/logger/logger'
+
+type OutgoingIntegrationEvent = AccountCreatedV1
+type SendEvent = (event: OutgoingIntegrationEvent) => Promise<void>
+
+/** A rejected delivery with an explicit retry classification from its adapter. */
+export class EventDeliveryError extends Error {
+  constructor(
+    message: string,
+    public readonly retryable: boolean,
+  ) {
+    super(message)
+    this.name = 'EventDeliveryError'
+  }
+}
+
+export interface ClaimedOutboxEvent {
+  id: string
+  event: OutgoingIntegrationEvent
+  occurredAt: Date
+  attemptCount: number
+  leaseOwner: string
+}
+
+type OutboxDeliveryPort = {
+  claimDue(input: {
+    limit: number
+    leaseMs: number
+    leaseOwner: string
+  }): Promise<ClaimedOutboxEvent[]>
+  markPublished(input: { eventId: string; leaseOwner: string }): Promise<boolean>
+  markFailed(input: {
+    eventId: string
+    leaseOwner: string
+    error: string
+    nextAttemptAt: Date
+  }): Promise<boolean>
+  markDeadLettered(input: {
+    eventId: string
+    leaseOwner: string
+    error: string
+  }): Promise<boolean>
+}
 
 export interface DeliverPendingEventsOptions extends RetryPolicy {
   batchSize: number
@@ -14,7 +52,7 @@ export interface DeliverPendingEventsOptions extends RetryPolicy {
 }
 
 export interface DeliverPendingEventsDeps {
-  outbox: OutboxDeliveryRepository
+  outbox: OutboxDeliveryPort
   sendEvent: SendEvent
   metrics: DeliveryMetrics
   logger: Logger
@@ -27,7 +65,7 @@ const errorMessage = (error: unknown): string =>
   (error instanceof Error ? error.message : String(error)).slice(0, 1_000)
 
 const isRetryable = (error: unknown): boolean =>
-  !(error instanceof EventDeliveryHttpError) || error.retryable
+  !(error instanceof EventDeliveryError) || error.retryable
 
 const recordSafely = (
   metrics: DeliveryMetrics,

@@ -1,13 +1,13 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { createPostgresAuthRepository } from '@/modules/auth/repo/postgres-auth.repository'
+import { createAuthRepository } from '@/modules/auth/repo/auth.repository'
 import { toAuthAccount, type AuthAccountRow } from '@/modules/auth/repo/auth.mapper'
-import type { RefreshTokenRow } from '@/modules/session/entities/refresh.entity'
-import type { SessionRow } from '@/modules/session/entities/session.entity'
-import { ChangePasswordUseCase } from '@/modules/auth/use-cases/change-password'
-import { LogoutAllUseCase } from '@/modules/session/use-cases/logout-all'
-import { LogoutUseCase } from '@/modules/session/use-cases/logout'
-import { SessionRepository } from '@/modules/session/repo/session.repository'
-import { RotateTokensUseCase } from '@/modules/session/use-cases/rotate-tokens'
+import type { RefreshTokenRow } from '@/modules/session/repo/refresh-token.mapper'
+import type { SessionRow } from '@/modules/session/repo/session.mapper'
+import { createChangePasswordUseCase } from '@/modules/auth/use-cases/change-password'
+import { createLogoutAllUseCase } from '@/modules/session/use-cases/logout-all'
+import { createLogoutUseCase } from '@/modules/session/use-cases/logout'
+import { createSessionRepository } from '@/modules/session/repo/session.repository'
+import { createRotateTokensUseCase } from '@/modules/session/use-cases/rotate-tokens'
 import {
   AuthAccountBlockedError,
   NotFoundError,
@@ -78,9 +78,9 @@ describe('ChangePasswordUseCase', () => {
   test('rejects a missing auth account', async () => {
     const database = createInMemoryDatabase()
     const passwordHasher = hasher()
-    const changePassword = ChangePasswordUseCase({
+    const changePassword = createChangePasswordUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
-      authRepository: createPostgresAuthRepository(database.sql),
+      authAccounts: createAuthRepository(database.sql),
       passwordHasher,
     })
 
@@ -94,9 +94,9 @@ describe('ChangePasswordUseCase', () => {
     const database = createInMemoryDatabase()
     database.authAccounts.push(authAccountRow())
     const passwordHasher = hasher(false)
-    const changePassword = ChangePasswordUseCase({
+    const changePassword = createChangePasswordUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
-      authRepository: createPostgresAuthRepository(database.sql),
+      authAccounts: createAuthRepository(database.sql),
       passwordHasher,
     })
 
@@ -114,9 +114,9 @@ describe('ChangePasswordUseCase', () => {
       id: '00000000-0000-4000-8000-000000000004',
     }))
     const passwordHasher = hasher(true)
-    const changePassword = ChangePasswordUseCase({
+    const changePassword = createChangePasswordUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
-      authRepository: createPostgresAuthRepository(database.sql),
+      authAccounts: createAuthRepository(database.sql),
       passwordHasher,
     })
 
@@ -135,11 +135,11 @@ describe('ChangePasswordUseCase', () => {
     database.authAccounts.push(authAccountRow({ password_hash: 'hash:concurrent-password' }))
     database.sessions.push(sessionRow())
 
-    const authRepository = createPostgresAuthRepository(database.sql)
-    authRepository.findById = mock(async () => toAuthAccount(authAccountRow()))
-    const changePassword = ChangePasswordUseCase({
+    const authAccounts = createAuthRepository(database.sql)
+    authAccounts.findById = mock(async () => toAuthAccount(authAccountRow()))
+    const changePassword = createChangePasswordUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
-      authRepository,
+      authAccounts,
       passwordHasher: hasher(true),
     })
 
@@ -160,7 +160,7 @@ describe('LogoutUseCase', () => {
     database.refreshTokens.push(token)
     return {
       database,
-      logout: LogoutUseCase({
+      logout: createLogoutUseCase({
         unitOfWork: createAuthUnitOfWork(database.sql),
         refreshTokenGenerator: generator(),
       }),
@@ -169,7 +169,7 @@ describe('LogoutUseCase', () => {
 
   test('rejects an unknown refresh token', async () => {
     const database = createInMemoryDatabase()
-    const logout = LogoutUseCase({
+    const logout = createLogoutUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
       refreshTokenGenerator: generator(),
     })
@@ -179,7 +179,7 @@ describe('LogoutUseCase', () => {
   test('rejects a token whose session is missing or revoked', async () => {
     const missingSession = createInMemoryDatabase()
     missingSession.refreshTokens.push(refreshRow())
-    await expect(LogoutUseCase({
+    await expect(createLogoutUseCase({
       unitOfWork: createAuthUnitOfWork(missingSession.sql),
       refreshTokenGenerator: generator(),
     })('raw-refresh')).rejects.toBeInstanceOf(UnauthorizedError)
@@ -212,8 +212,8 @@ describe('LogoutAllUseCase', () => {
       sessionRow({ id: '00000000-0000-4000-8000-000000000005', user_id: 'another-user' }),
     )
 
-    await LogoutAllUseCase({
-      sessionRepository: SessionRepository(database.sql),
+    await createLogoutAllUseCase({
+      sessions: createSessionRepository(database.sql),
     })(userId)
 
     expect(database.sessions.slice(0, 2).every(row => row.revoked_reason === 'logout_all')).toBe(true)
@@ -235,7 +235,7 @@ describe('RotateTokensUseCase', () => {
     if (options.token !== null) database.refreshTokens.push(options.token ?? refreshRow())
     const refreshTokenGenerator = generator()
     const jwtSigner = { sign: mock(async () => 'new-access-token') }
-    const rotate = RotateTokensUseCase({
+    const rotate = createRotateTokensUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
       jwtSigner,
       refreshTokenGenerator,

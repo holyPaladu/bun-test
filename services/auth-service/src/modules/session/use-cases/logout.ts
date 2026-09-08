@@ -8,7 +8,7 @@ export interface LogoutUseCaseDeps {
 }
 
 /** Логаут завершает всю сессию (устройство), а не только предъявленный токен. */
-export const LogoutUseCase = (deps: LogoutUseCaseDeps) =>
+export const createLogoutUseCase = (deps: LogoutUseCaseDeps) =>
   async (refreshToken: string): Promise<void> => {
     await deps.unitOfWork.run(async repositories => {
       const tokenHash = deps.refreshTokenGenerator.hash(refreshToken)
@@ -25,4 +25,4 @@ export const LogoutUseCase = (deps: LogoutUseCaseDeps) =>
     })
   }
 
-export type Logout = ReturnType<typeof LogoutUseCase>
+export type Logout = ReturnType<typeof createLogoutUseCase>

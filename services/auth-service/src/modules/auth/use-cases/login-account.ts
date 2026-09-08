@@ -1,12 +1,12 @@
 import { AuthAccountBlockedError, UnauthorizedError } from '@/shared/errors/app-error'
+import type { AuthAccount } from '@/modules/auth/entities/auth-account.entity'
 import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
 import type { Meta } from '@/shared/types/meta.type'
-import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
 import type { IssueTokens } from '@/modules/session/use-cases/issue-tokens'
 import { normalizeEmail } from '@/shared/utils/normalizer'
 
 interface LoginAccountDeps {
-  authRepository: AuthRepository
+  authAccounts: { findByEmail(email: string): Promise<AuthAccount | null> }
   passwordHasher: PasswordHasher
   issueTokens: IssueTokens
 }
@@ -14,14 +14,14 @@ interface LoginAccountDeps {
 export interface LoginAccountInput { email: string; password: string }
 export interface LoginAccountResult { accessToken: string; refreshToken: string }
 
-export const LoginAccountUseCase = ({
-  authRepository,
+export const createLoginAccountUseCase = ({
+  authAccounts,
   passwordHasher,
   issueTokens,
 }: LoginAccountDeps) =>
   async (input: LoginAccountInput, meta: Meta): Promise<LoginAccountResult> => {
     const email = normalizeEmail(input.email)
-    const account = await authRepository.findByEmail(email)
+    const account = await authAccounts.findByEmail(email)
     if (!account) throw new UnauthorizedError()
     if (account.authStatus !== 'active') throw new AuthAccountBlockedError()
 
@@ -31,4 +31,4 @@ export const LoginAccountUseCase = ({
     return issueTokens(account.id, meta)
   }
 
-export type LoginAccount = ReturnType<typeof LoginAccountUseCase>
+export type LoginAccount = ReturnType<typeof createLoginAccountUseCase>

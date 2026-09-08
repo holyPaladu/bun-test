@@ -1,13 +1,15 @@
-import type { SessionRepository } from '@/modules/session/repo/session.repository'
+import type { SessionRevokedReason } from '@/modules/session/entities/session.entity'
 
 export interface LogoutAllDeps {
-  sessionRepository: Pick<SessionRepository, 'revokeAllByUserId'>
+  sessions: {
+    revokeAllByUserId(userId: string, reason: SessionRevokedReason): Promise<void>
+  }
 }
 
 /** В отличие от Logout, здесь не нужен конкретный refresh-token — рвём все активные сессии владельца. */
-export const LogoutAllUseCase = ({ sessionRepository }: LogoutAllDeps) =>
+export const createLogoutAllUseCase = ({ sessions }: LogoutAllDeps) =>
   async (userId: string): Promise<void> => {
-    await sessionRepository.revokeAllByUserId(userId, 'logout_all')
+    await sessions.revokeAllByUserId(userId, 'logout_all')
   }
 
-export type LogoutAll = ReturnType<typeof LogoutAllUseCase>
+export type LogoutAll = ReturnType<typeof createLogoutAllUseCase>

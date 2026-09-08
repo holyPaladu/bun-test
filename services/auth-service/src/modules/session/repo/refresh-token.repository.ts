@@ -1,6 +1,6 @@
 import type { DatabaseClient } from '@/shared/database/client'
-import type { RefreshToken, RefreshTokenRow } from '@/modules/session/entities/refresh.entity'
-import { toRefreshToken } from '@/modules/session/entities/refresh.entity'
+import type { RefreshToken } from '@/modules/session/entities/refresh.entity'
+import { toRefreshToken, type RefreshTokenRow } from './refresh-token.mapper'
 
 export interface RefreshTokenRepository {
   insert(input: {
@@ -16,7 +16,7 @@ export interface RefreshTokenRepository {
   revoke(tokenId: string, newTokenId?: string | null): Promise<boolean>
 }
 
-export const RefreshTokenRepository = (sql: DatabaseClient): RefreshTokenRepository => ({
+export const createRefreshTokenRepository = (sql: DatabaseClient): RefreshTokenRepository => ({
   insert: async ({ sessionId, userId, tokenHash, expiresAt, ip, userAgent }) => {
     const [row] = await sql<RefreshTokenRow[]>`
       INSERT INTO refresh_tokens (session_id, user_id, token_hash, expires_at, ip_address, user_agent)

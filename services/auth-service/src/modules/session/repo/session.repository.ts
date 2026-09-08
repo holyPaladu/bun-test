@@ -1,8 +1,8 @@
 import type { DatabaseClient } from '@/shared/database/client'
 import { PaginationInside } from '@/shared/types/meta.type';
 import { PaginatedResult } from '@/shared/types/result.type'
-import type { Session, SessionRevokedReason, SessionRow } from '@/modules/session/entities/session.entity'
-import { toSession, RevokedSession } from '@/modules/session/entities/session.entity'
+import type { Session, SessionRevokedReason } from '@/modules/session/entities/session.entity'
+import { toSession, type SessionRow } from './session.mapper'
 
 export interface SessionRepository {
   insert(input: {
@@ -19,7 +19,7 @@ export interface SessionRepository {
   revokeSessionByUserId(sessionId: string, userId: string, reason: SessionRevokedReason): Promise<boolean>
 }
 
-export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
+export const createSessionRepository = (sql: DatabaseClient): SessionRepository => ({
   insert: async ({ userId, absoluteExpiresAt, ip, userAgent }) => {
     const [row] = await sql<SessionRow[]>`
       INSERT INTO sessions (user_id, absolute_expires_at, ip_address, user_agent, last_seen_at)
@@ -103,7 +103,7 @@ export const SessionRepository = (sql: DatabaseClient): SessionRepository => ({
   },
 
   revokeSessionByUserId: async (sessionId, userId, reason) => {
-    const [row] = await sql<RevokedSession[]>`
+    const [row] = await sql<{ id: string }[]>`
       UPDATE sessions
       SET
         revoked_at = NOW(),

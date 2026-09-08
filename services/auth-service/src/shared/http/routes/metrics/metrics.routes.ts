@@ -1,11 +1,14 @@
 import { Elysia } from 'elysia'
-import type { OutboxStats } from '@/modules/integration-events/outgoing/repo/outbox.repository'
 import type { PrometheusRegistry } from './prometheus.registry'
 
 export interface MetricsRoutesDeps {
   registry: PrometheusRegistry
   namespace: string
-  collectOutboxStats: () => Promise<OutboxStats>
+  collectOutboxStats: () => Promise<{
+    pending: number
+    deadLettered: number
+    oldestPendingAgeSeconds: number
+  }>
 }
 
 export const createMetricsRoutes = ({

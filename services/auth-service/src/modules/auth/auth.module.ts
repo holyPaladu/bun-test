@@ -1,8 +1,8 @@
 import type { Container } from '@/container'
-import { createPostgresAuthRepository } from '@/modules/auth/repo/postgres-auth.repository'
+import { createAuthRepository } from '@/modules/auth/repo/auth.repository'
 import { createAuthRoutes } from '@/modules/auth/http/auth.routes'
-import { ChangePasswordUseCase } from '@/modules/auth/use-cases/change-password'
-import { LoginAccountUseCase } from '@/modules/auth/use-cases/login-account'
+import { createChangePasswordUseCase } from '@/modules/auth/use-cases/change-password'
+import { createLoginAccountUseCase } from '@/modules/auth/use-cases/login-account'
 import { createRegisterAccountUseCase } from '@/modules/auth/use-cases/register-account'
 import { createSessionModule } from '@/modules/session/session.module'
 
@@ -11,7 +11,7 @@ export const createAuthModule = (container: Pick<
   Container,
   'sql' | 'passwordHasher' | 'jwtSigner' | 'jwtVerifier' | 'unitOfWork' | 'env'
 >) => {
-  const authRepository = createPostgresAuthRepository(container.sql)
+  const authAccounts = createAuthRepository(container.sql)
   const session = createSessionModule(container)
 
   return createAuthRoutes({
@@ -19,8 +19,8 @@ export const createAuthModule = (container: Pick<
       unitOfWork: container.unitOfWork,
       passwordHasher: container.passwordHasher,
     }),
-    loginAccount: LoginAccountUseCase({
-      authRepository,
+    loginAccount: createLoginAccountUseCase({
+      authAccounts,
       passwordHasher: container.passwordHasher,
       issueTokens: session.issueTokens,
     }),
@@ -30,9 +30,9 @@ export const createAuthModule = (container: Pick<
     jwtVerifier: container.jwtVerifier,
     getSessions: session.getSessions,
     revokeSessionByUserId: session.revokeSessionByUserId,
-    changePasswordInside: ChangePasswordUseCase({
+    changePassword: createChangePasswordUseCase({
       unitOfWork: container.unitOfWork,
-      authRepository,
+      authAccounts,
       passwordHasher: container.passwordHasher,
     }),
   })

@@ -1,16 +1,20 @@
-import { NotFoundError } from "elysia"
-import { SessionRevokedReason } from "../entities/session.entity"
-import { SessionRepository } from "../repo/session.repository"
-
+import type { SessionRevokedReason } from '../entities/session.entity'
+import { NotFoundError } from '@/shared/errors/app-error'
 
 export interface RevokeSessionByUserIdDeps {
-  sessionRepo: SessionRepository
+  sessions: {
+    revokeSessionByUserId(
+      sessionId: string,
+      userId: string,
+      reason: SessionRevokedReason,
+    ): Promise<boolean>
+  }
 }
 
-export const RevokeSessionByUserIdUseCase = ({ sessionRepo }: RevokeSessionByUserIdDeps) => 
+export const createRevokeSessionByUserIdUseCase = ({ sessions }: RevokeSessionByUserIdDeps) =>
   async (sessionId: string, userId: string, reason: SessionRevokedReason) => {
-    const deleted = await sessionRepo.revokeSessionByUserId(sessionId, userId, reason)
-    if (!deleted) throw new NotFoundError("Session")
+    const deleted = await sessions.revokeSessionByUserId(sessionId, userId, reason)
+    if (!deleted) throw new NotFoundError('Session')
   }
 
-export type RevokeSessionByUserId = ReturnType<typeof RevokeSessionByUserIdUseCase>
+export type RevokeSessionByUserId = ReturnType<typeof createRevokeSessionByUserIdUseCase>

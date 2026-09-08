@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { createAccountCreatedEvent } from '@/modules/auth/events/create-account-created.event'
-import { createPostgresOutboxRepository } from '@/modules/integration-events/outgoing/repo/postgres-outbox.repository'
+import { createOutboxRepository } from '@/modules/integration-events/outgoing/repo/outbox.repository'
 import { createAuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
 
 const databaseUrl = Bun.env.TEST_DATABASE_URL
@@ -76,7 +76,7 @@ run('integration events on PostgreSQL', () => {
   })
 
   test('rejects a state update from an expired lease owner', async () => {
-    const outbox = createPostgresOutboxRepository(sql)
+    const outbox = createOutboxRepository(sql)
     const event = createAccountCreatedEvent('550e8400-e29b-41d4-a716-446655440000')
     await outbox.append(event, event.data.userId)
     const [stale] = await outbox.claimDue({ limit: 1, leaseMs: 10, leaseOwner: 'old' })

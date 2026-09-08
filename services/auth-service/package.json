@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun run --watch src/server.ts | pino-pretty -c -t 'HH:MM:ss'",
     "start": "bun run src/server.ts",
-    "build": "bun build src/server.ts --compile --minify --outfile build/.output",
+    "build": "bun build src/server.ts src/modules/integration-events/outgoing/outbox.worker.ts --compile --minify --outfile build/.output",
     "build:migrate": "bun build scripts/migrate.ts --target bun --outfile build/scripts/migrate.js",
     "build:start": "bun run build && ./build/.output",
     "test": "bun test",
@@ -19,9 +19,10 @@
     "jwt:generate-keys": "bun run scripts/generate-jwt-keys.ts"
   },
   "dependencies": {
-    "@test-project/integration-event-contracts": "file:../../packages/integration-event-contracts",
+    "@elysia/cron": "1.4.2",
     "@elysiajs/openapi": "1.4.16",
     "@sinclair/typebox": "0.34.52",
+    "@test-project/integration-event-contracts": "file:../../packages/integration-event-contracts",
     "elysia": "1.4.30",
     "jose": "6.2.10",
     "pino": "10.3.1"

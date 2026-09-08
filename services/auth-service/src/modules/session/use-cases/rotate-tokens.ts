@@ -23,7 +23,7 @@ export interface RotateTokensDeps {
  * значения. В этом случае убиваем не токен (он и так мёртв), а всю сессию, чтобы
  * оборвать и уже выданный атакующему следующий токен из цепочки.
  */
-export const RotateTokensUseCase = ({
+export const createRotateTokensUseCase = ({
   unitOfWork,
   jwtSigner,
   refreshTokenGenerator,
@@ -79,4 +79,4 @@ export const RotateTokensUseCase = ({
     return tokens
   }
 
-export type RotateTokens = ReturnType<typeof RotateTokensUseCase>
+export type RotateTokens = ReturnType<typeof createRotateTokensUseCase>

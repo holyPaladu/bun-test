@@ -1,20 +1,11 @@
-import type { OutgoingIntegrationEvent } from '../repo/outbox.repository'
+import type { AccountCreatedV1 as OutgoingIntegrationEvent } from '@test-project/integration-event-contracts'
+import { EventDeliveryError } from '../deliver-pending-events'
 
 export interface SendEventHttpOptions {
   url: string
   token: string
   timeoutMs: number
   fetch?: typeof globalThis.fetch
-}
-
-export class EventDeliveryHttpError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly retryable: boolean,
-  ) {
-    super(`Consumer responded with HTTP ${status}`)
-    this.name = 'EventDeliveryHttpError'
-  }
 }
 
 export type SendEvent = (event: OutgoingIntegrationEvent) => Promise<void>
@@ -38,7 +29,10 @@ export const createHttpEventSender = (options: SendEventHttpOptions): SendEvent 
       const retryable = response.status === 408
         || response.status === 429
         || response.status >= 500
-      throw new EventDeliveryHttpError(response.status, retryable)
+      throw new EventDeliveryError(
+        `Consumer responded with HTTP ${response.status}`,
+        retryable,
+      )
     }
   }
 }

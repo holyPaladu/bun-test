@@ -1,23 +1,23 @@
 import type { AuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
-import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
+import type { AuthAccount } from '@/modules/auth/entities/auth-account.entity'
 import { UnauthorizedError } from '@/shared/errors/app-error'
 import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
 
 export interface ChangePasswordDeps {
   unitOfWork: AuthUnitOfWork
-  authRepository: AuthRepository
+  authAccounts: { findById(id: string): Promise<AuthAccount | null> }
   passwordHasher: PasswordHasher
 }
 
 export interface ChangePasswordInput { oldPassword: string; newPassword: string }
 
-export const ChangePasswordUseCase = ({
+export const createChangePasswordUseCase = ({
   unitOfWork,
-  authRepository,
+  authAccounts,
   passwordHasher,
 }: ChangePasswordDeps) =>
   async (userId: string, { oldPassword, newPassword }: ChangePasswordInput) => {
-    const storedAccount = await authRepository.findById(userId)
+    const storedAccount = await authAccounts.findById(userId)
     if (!storedAccount) throw new UnauthorizedError()
     if (!(await passwordHasher.verify(oldPassword, storedAccount.passwordHash))) {
       throw new UnauthorizedError()
@@ -37,4 +37,4 @@ export const ChangePasswordUseCase = ({
     })
   }
 
-export type ChangePassword = ReturnType<typeof ChangePasswordUseCase>
+export type ChangePassword = ReturnType<typeof createChangePasswordUseCase>

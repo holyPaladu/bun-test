@@ -5,9 +5,8 @@ import {
   accountCreatedV1Schema,
   type AccountCreatedV1,
 } from '@test-project/integration-event-contracts'
-import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
 import type { AuthAccount } from '@/modules/auth/entities/auth-account.entity'
-import { LoginAccountUseCase } from '@/modules/auth/use-cases/login-account'
+import { createLoginAccountUseCase } from '@/modules/auth/use-cases/login-account'
 import { createRegisterAccountUseCase } from '@/modules/auth/use-cases/register-account'
 import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
 import { AuthAccountBlockedError, UnauthorizedError } from '@/shared/errors/app-error'
@@ -24,11 +23,10 @@ const activeAccount = (overrides: Partial<AuthAccount> = {}): AuthAccount => ({
   ...overrides,
 })
 
-const repository = (overrides: Partial<AuthRepository> = {}): AuthRepository => ({
-  insert: mock(async () => activeAccount()),
+type AuthAccounts = Parameters<typeof createLoginAccountUseCase>[0]['authAccounts']
+
+const repository = (overrides: Partial<AuthAccounts> = {}): AuthAccounts => ({
   findByEmail: mock(async () => null),
-  findById: mock(async () => null),
-  setNewPasswordHash: mock(async () => true),
   ...overrides,
 })
 
@@ -99,7 +97,7 @@ describe('LoginAccountUseCase', () => {
     const repo = repository({ findByEmail: mock(async () => activeAccount()) })
     const passwordHasher = hasher(true)
     const issueTokens = mock(async () => ({ accessToken: 'access', refreshToken: 'refresh' }))
-    const login = LoginAccountUseCase({ authRepository: repo, passwordHasher, issueTokens })
+    const login = createLoginAccountUseCase({ authAccounts: repo, passwordHasher, issueTokens })
 
     await expect(login(input, meta)).resolves.toEqual({ accessToken: 'access', refreshToken: 'refresh' })
     expect(repo.findByEmail).toHaveBeenCalledWith('user@example.com')
@@ -109,8 +107,8 @@ describe('LoginAccountUseCase', () => {
 
   test('rejects an unknown account without checking the password', async () => {
     const passwordHasher = hasher()
-    const login = LoginAccountUseCase({
-      authRepository: repository(),
+    const login = createLoginAccountUseCase({
+      authAccounts: repository(),
       passwordHasher,
       issueTokens: mock(async () => ({ accessToken: '', refreshToken: '' })),
     })
@@ -121,8 +119,8 @@ describe('LoginAccountUseCase', () => {
 
   test('rejects a blocked account before checking the password', async () => {
     const passwordHasher = hasher()
-    const login = LoginAccountUseCase({
-      authRepository: repository({
+    const login = createLoginAccountUseCase({
+      authAccounts: repository({
         findByEmail: mock(async () => activeAccount({ authStatus: 'blocked' })),
       }),
       passwordHasher,
@@ -135,8 +133,8 @@ describe('LoginAccountUseCase', () => {
 
   test('rejects an invalid password and does not issue tokens', async () => {
     const issueTokens = mock(async () => ({ accessToken: '', refreshToken: '' }))
-    const login = LoginAccountUseCase({
-      authRepository: repository({ findByEmail: mock(async () => activeAccount()) }),
+    const login = createLoginAccountUseCase({
+      authAccounts: repository({ findByEmail: mock(async () => activeAccount()) }),
       passwordHasher: hasher(false),
       issueTokens,
     })

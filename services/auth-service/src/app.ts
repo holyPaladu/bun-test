@@ -26,6 +26,7 @@ export const createApp = (
     .use(openapiPlugin)
     .use(healthRoute(container.sql))
     .use(createJwksRoute(container.jwtVerifier))
+    .use(integrationEvents.outboxCron)
     .use(integrationEvents.metricsRoutes)
     .group('/api', app => app
       .use(successEnvelope)

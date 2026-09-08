@@ -1,11 +1,20 @@
 import { describe, expect, mock, test } from 'bun:test'
 import type { AccountCreatedV1 } from '@test-project/integration-event-contracts'
-import { createDeliverPendingEvents } from '@/modules/integration-events/outgoing/deliver-pending-events'
-import { EventDeliveryHttpError } from '@/modules/integration-events/outgoing/http/send-event.http'
+import {
+  createDeliverPendingEvents,
+  EventDeliveryError,
+} from '@/modules/integration-events/outgoing/deliver-pending-events'
 import { createDeliveryMetrics } from '@/modules/integration-events/outgoing/metrics/delivery.metrics'
-import { createOutboxWorker } from '@/modules/integration-events/outgoing/outbox.worker'
-import type { OutboxRepository } from '@/modules/integration-events/outgoing/repo/outbox.repository'
-import { createPostgresOutboxRepository } from '@/modules/integration-events/outgoing/repo/postgres-outbox.repository'
+import {
+  createOutboxCron,
+  OutboxWorkerTransportError,
+  requestWorkerRun,
+} from '@/modules/integration-events/outgoing/outbox.cron'
+import type {
+  OutboxWorkerCommand,
+  OutboxWorkerResult,
+} from '@/modules/integration-events/outgoing/outbox-worker.messages'
+import { createOutboxRepository } from '@/modules/integration-events/outgoing/repo/outbox.repository'
 import { createPrometheusRegistry } from '@/shared/http/routes/metrics/prometheus.registry'
 import type { Logger } from '@/shared/lib/logger/logger'
 import { createInMemoryDatabase } from '../helpers/in-memory-database'
@@ -19,8 +28,9 @@ const event: AccountCreatedV1 = {
 
 const logger: Logger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
 
-const repository = (attemptCount = 1): OutboxRepository => ({
-  append: mock(async () => {}),
+type OutboxDeliveryPort = Parameters<typeof createDeliverPendingEvents>[0]['outbox']
+
+const repository = (attemptCount = 1): OutboxDeliveryPort => ({
   claimDue: mock(async input => [{
     id: event.eventId,
     event,
@@ -31,12 +41,10 @@ const repository = (attemptCount = 1): OutboxRepository => ({
   markPublished: mock(async () => true),
   markFailed: mock(async () => true),
   markDeadLettered: mock(async () => true),
-  replayDeadLettered: mock(async () => true),
-  getStats: mock(async () => ({ pending: 0, deadLettered: 0, oldestPendingAgeSeconds: 0 })),
 })
 
 const deliver = (
-  outbox: OutboxRepository,
+  outbox: OutboxDeliveryPort,
   sendEvent: (event: AccountCreatedV1) => Promise<void>,
   attemptCount = 1,
 ) => createDeliverPendingEvents({
@@ -75,7 +83,9 @@ describe('deliverPendingEvents', () => {
 
   test('dead-letters permanent HTTP errors without exhausting retries', async () => {
     const outbox = repository(1)
-    await deliver(outbox, mock(async () => { throw new EventDeliveryHttpError(422, false) }))()
+    await deliver(outbox, mock(async () => {
+      throw new EventDeliveryError('Consumer responded with HTTP 422', false)
+    }))()
     expect(outbox.markDeadLettered).toHaveBeenCalledWith({
       eventId: event.eventId,
       leaseOwner: 'worker-a',
@@ -128,7 +138,7 @@ describe('deliverPendingEvents', () => {
 describe('outbox lease ownership', () => {
   test('an expired owner cannot overwrite the result of a new claim', async () => {
     const database = createInMemoryDatabase()
-    const outbox = createPostgresOutboxRepository(database.sql)
+    const outbox = createOutboxRepository(database.sql)
     await outbox.append(event, event.data.userId)
 
     const [staleClaim] = await outbox.claimDue({ limit: 1, leaseMs: 30_000, leaseOwner: 'a' })
@@ -165,24 +175,94 @@ describe('delivery metrics', () => {
   })
 })
 
-describe('outbox worker', () => {
-  test('start is idempotent, cycles do not overlap, and stop waits for the active cycle', async () => {
-    let release!: () => void
-    const gate = new Promise<void>(resolve => { release = resolve })
-    const run = mock(async () => gate)
-    const worker = createOutboxWorker({ deliverPendingEvents: run, pollIntervalMs: 1, logger })
+class FakeWorker extends EventTarget {
+  readonly postMessage = mock((_command: OutboxWorkerCommand) => {})
+  readonly terminate = mock(() => {})
 
-    worker.start()
-    worker.start()
-    await Bun.sleep(5)
-    expect(run).toHaveBeenCalledTimes(1)
+  respond(result: OutboxWorkerResult): void {
+    this.dispatchEvent(new MessageEvent('message', { data: result }))
+  }
+}
 
-    let stopped = false
-    const stopping = worker.stop().then(() => { stopped = true })
-    await Bun.sleep(1)
-    expect(stopped).toBe(false)
-    release()
-    await stopping
-    expect(stopped).toBe(true)
+describe('outbox worker IPC', () => {
+  test('waits for the matching response and forwards metric observations', async () => {
+    const fake = new FakeWorker()
+    const recordAttempt = mock(() => {})
+    const run = requestWorkerRun(fake as unknown as Worker, {
+      timeoutMs: 100,
+      requestId: 'request-1',
+      recordAttempt,
+    })
+
+    expect(fake.postMessage).toHaveBeenCalledWith({
+      type: 'deliver-pending-events', requestId: 'request-1',
+    })
+    fake.respond({
+      type: 'delivery-attempt',
+      requestId: 'request-1',
+      observation: {
+        eventType: event.type,
+        outcome: 'published',
+        durationSeconds: 0.25,
+        occurredAt: event.occurredAt,
+        completedAt: '2026-09-07T10:00:01.000Z',
+      },
+    })
+    fake.respond({ type: 'completed', requestId: 'request-1' })
+
+    await expect(run).resolves.toBeUndefined()
+    expect(recordAttempt).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: event.type,
+      outcome: 'published',
+      occurredAt: new Date(event.occurredAt),
+    }))
+  })
+
+  test('rejects a failed response, crash, and timeout', async () => {
+    const failed = new FakeWorker()
+    const failedRun = requestWorkerRun(failed as unknown as Worker, {
+      timeoutMs: 100, requestId: 'failed', recordAttempt: () => {},
+    })
+    failed.respond({ type: 'failed', requestId: 'failed', error: 'database unavailable' })
+    await expect(failedRun).rejects.toThrow('database unavailable')
+
+    const crashed = new FakeWorker()
+    const crashedRun = requestWorkerRun(crashed as unknown as Worker, {
+      timeoutMs: 100, requestId: 'crashed', recordAttempt: () => {},
+    })
+    crashed.dispatchEvent(new Event('close'))
+    await expect(crashedRun).rejects.toBeInstanceOf(OutboxWorkerTransportError)
+
+    const timedOut = new FakeWorker()
+    await expect(requestWorkerRun(timedOut as unknown as Worker, {
+      timeoutMs: 1, requestId: 'timeout', recordAttempt: () => {},
+    })).rejects.toThrow('timed out')
+  })
+
+  test('cron restarts a closed worker and terminates the active worker on app stop', async () => {
+    const workers: FakeWorker[] = []
+    const app = createOutboxCron(logger, {
+      pattern: '0 0 1 1 *',
+      timezone: 'UTC',
+      timeoutMs: 100,
+      recordAttempt: () => {},
+      createWorker: () => {
+        const worker = new FakeWorker()
+        worker.postMessage.mockImplementation(command => queueMicrotask(() => {
+          worker.respond({ type: 'completed', requestId: command.requestId })
+        }))
+        workers.push(worker)
+        return worker as unknown as Worker
+      },
+    }).listen(0)
+
+    expect(workers).toHaveLength(1)
+    workers[0]!.dispatchEvent(new Event('close'))
+    await app.store.cron.outboxDelivery.trigger()
+    expect(workers).toHaveLength(2)
+
+    await app.stop()
+    expect(workers[1]!.terminate).toHaveBeenCalledTimes(1)
+    expect(app.store.cron.outboxDelivery.isStopped()).toBe(true)
   })
 })

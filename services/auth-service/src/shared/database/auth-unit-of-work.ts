@@ -1,17 +1,15 @@
-import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
-import { createPostgresAuthRepository } from '@/modules/auth/repo/postgres-auth.repository'
-import { RefreshTokenRepository } from '@/modules/session/repo/refresh-token.repository'
-import { SessionRepository } from '@/modules/session/repo/session.repository'
-import { createPostgresOutboxRepository } from '@/modules/integration-events/outgoing/repo/postgres-outbox.repository'
-import type { OutboxAppendRepository } from '@/modules/integration-events/outgoing/repo/outbox.repository'
+import { createAuthRepository } from '@/modules/auth/repo/auth.repository'
+import { createRefreshTokenRepository } from '@/modules/session/repo/refresh-token.repository'
+import { createSessionRepository } from '@/modules/session/repo/session.repository'
+import { createOutboxRepository } from '@/modules/integration-events/outgoing/repo/outbox.repository'
 import type { DatabaseClient } from '@/shared/database/client'
 
 /** Репозитории, привязанные к одной DB-транзакции auth-service. */
 export interface AuthTransactionRepositories {
-  authAccounts: AuthRepository
-  refreshTokens: RefreshTokenRepository
-  sessions: SessionRepository
-  outboxEvents: OutboxAppendRepository
+  authAccounts: ReturnType<typeof createAuthRepository>
+  refreshTokens: ReturnType<typeof createRefreshTokenRepository>
+  sessions: ReturnType<typeof createSessionRepository>
+  outboxEvents: Pick<ReturnType<typeof createOutboxRepository>, 'append'>
 }
 
 /** Application port: use cases не знают ни про Bun SQL, ни про repo factories. */
@@ -24,9 +22,9 @@ export interface AuthUnitOfWork {
 /** PostgreSQL-сборка транзакционных репозиториев auth-service. */
 export const createAuthUnitOfWork = (sql: DatabaseClient): AuthUnitOfWork => ({
   run: work => sql.begin(transaction => work({
-    authAccounts: createPostgresAuthRepository(transaction),
-    refreshTokens: RefreshTokenRepository(transaction),
-    sessions: SessionRepository(transaction),
-    outboxEvents: createPostgresOutboxRepository(transaction),
+    authAccounts: createAuthRepository(transaction),
+    refreshTokens: createRefreshTokenRepository(transaction),
+    sessions: createSessionRepository(transaction),
+    outboxEvents: createOutboxRepository(transaction),
   })),
 })

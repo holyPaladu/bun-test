@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { toAuthAccount } from '@/modules/auth/repo/auth.mapper'
-import { toRefreshToken } from '@/modules/session/entities/refresh.entity'
-import { toSession } from '@/modules/session/entities/session.entity'
+import { toRefreshToken } from '@/modules/session/repo/refresh-token.mapper'
+import { toSession } from '@/modules/session/repo/session.mapper'
 import {
   AlreadyExistsError,
   isAppError,
@@ -95,6 +95,8 @@ describe('environment configuration', () => {
     expect(loadEnv({ ...required, PORT: '4567', REFRESH_TOKEN_TTL_DAYS: '7' })).toMatchObject({
       NODE_ENV: 'development', PORT: 4567, JWT_ISSUER: 'auth-service', JWT_AUDIENCE: 'api',
       JWT_EXPIRES_IN: '15m', REFRESH_TOKEN_TTL_DAYS: 7, SESSION_ABSOLUTE_TTL_DAYS: 90,
+      OUTBOX_CRON_PATTERN: '* * * * * *', OUTBOX_CRON_TIMEZONE: 'UTC',
+      OUTBOX_WORKER_TIMEOUT_MS: 10_000,
       LOG_LEVEL: 'info',
     })
   })

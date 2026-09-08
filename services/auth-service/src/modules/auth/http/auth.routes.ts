@@ -21,7 +21,7 @@ export interface AuthRoutesDeps {
   jwtVerifier: JwtVerifier
   getSessions: GetSessions
   revokeSessionByUserId: RevokeSessionByUserId
-  changePasswordInside: ChangePassword
+  changePassword: ChangePassword
 }
 
 export const createAuthRoutes = (deps: AuthRoutesDeps) =>
@@ -161,7 +161,7 @@ export const createAuthRoutes = (deps: AuthRoutesDeps) =>
       .put(
         '/change-password',
         async ({ user, body, set }) => {
-          await deps.changePasswordInside(user.userId, body)
+          await deps.changePassword(user.userId, body)
           set.status = 204
         },
         {
