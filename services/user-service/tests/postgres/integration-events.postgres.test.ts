@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { ACCOUNT_CREATED_V1, type AccountCreatedV1 } from '@test-project/integration-event-contracts'
-import { createReceiveIntegrationEvent } from '@/modules/integration-events/incoming/receive-integration-event'
-import { onAccountCreated } from '@/modules/user-profile/events/on-account-created'
+import { createReceiveIntegrationEventUseCase } from '@/modules/integration-events/incoming/use-cases/receive-integration-event'
+import { createIntegrationEventDispatcher } from '@/modules/integration-events/incoming/utils/dispatch-integration-event'
+import { userProfileIntegrationEventHandlers } from '@/modules/user-profile/user-profile.module'
 import { createUserUnitOfWork } from '@/shared/database/user-unit-of-work'
 
 const databaseUrl = Bun.env.TEST_DATABASE_URL
@@ -55,7 +56,7 @@ run('incoming integration events on PostgreSQL', () => {
   })
 
   test('rolls back inbox when the business handler fails', async () => {
-    const receive = createReceiveIntegrationEvent({
+    const receive = createReceiveIntegrationEventUseCase({
       unitOfWork: createUserUnitOfWork(sql),
       handleEvent: async (incoming, repositories) => {
         await repositories.userProfiles.createIfAbsent(incoming.data.userId)
@@ -73,9 +74,9 @@ run('incoming integration events on PostgreSQL', () => {
   })
 
   test('concurrent delivery applies the handler once', async () => {
-    const receive = createReceiveIntegrationEvent({
+    const receive = createReceiveIntegrationEventUseCase({
       unitOfWork: createUserUnitOfWork(sql),
-      handleEvent: onAccountCreated,
+      handleEvent: createIntegrationEventDispatcher(userProfileIntegrationEventHandlers),
     })
     const results = await Promise.all([receive(event), receive(event)])
     expect(results.sort()).toEqual([false, true])

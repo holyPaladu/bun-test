@@ -1,4 +1,6 @@
+import { ACCOUNT_CREATED_V1 } from '@test-project/integration-event-contracts'
 import type { Container } from '@/container'
+import { onAccountCreated } from './events/on-account-created'
 import { createUserProfileRepository } from './repo/user-profile.repository'
 import { createUserProfileRoutes } from './http/user-profile.routes'
 import { createGetMyProfileUseCase } from './use-cases/get-my-profile'
@@ -16,3 +18,8 @@ export const createUserProfileModule = (
     updateMyProfile: createUpdateMyProfileUseCase({ userProfiles }),
   })
 }
+
+/** Public integration-event capabilities provided by the profile module. */
+export const userProfileIntegrationEventHandlers = {
+  [ACCOUNT_CREATED_V1]: onAccountCreated,
+} as const

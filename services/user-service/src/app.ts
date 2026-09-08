@@ -8,7 +8,6 @@ import { successEnvelope } from '@/shared/http/success-envelope'
 import {
   createUserProfileModule,
 } from '@/modules/user-profile/user-profile.module'
-import { onAccountCreated } from '@/modules/user-profile/events/on-account-created'
 import { createIntegrationEventsModule } from '@/modules/integration-events/integration-events.module'
 
 /**
@@ -18,12 +17,9 @@ import { createIntegrationEventsModule } from '@/modules/integration-events/inte
  * родителе после точки подключения (см. success-envelope.ts).
  */
 export const createApp = (container: Container) => {
-  const integrationEvents = createIntegrationEventsModule(
-    container,
-    onAccountCreated,
-  )
+  const integrationEvents = createIntegrationEventsModule(container)
 
-  return new Elysia()
+  return new Elysia({ normalize: false })
     .use(createErrorHandler(container.logger))
     .use(createAccessLog(container.logger))
     .use(openapiPlugin)

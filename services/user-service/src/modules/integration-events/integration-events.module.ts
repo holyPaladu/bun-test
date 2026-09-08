@@ -1,23 +1,19 @@
 import type { Container } from '@/container'
-import { createIntegrationEventsRoutes } from './incoming/http/integration-events.routes'
-import {
-  createReceiveIntegrationEvent,
-  type HandleIntegrationEvent,
-} from './incoming/receive-integration-event'
+import { userProfileIntegrationEventHandlers } from '@/modules/user-profile/user-profile.module'
+import { createIncomingModule } from './incoming/incoming.module'
+import type { IntegrationEventHandlers } from './incoming/utils/dispatch-integration-event'
 
 export const createIntegrationEventsModule = (
   container: Pick<Container, 'env' | 'unitOfWork'>,
-  handleEvent: HandleIntegrationEvent,
 ) => {
-  const receiveIntegrationEvent = createReceiveIntegrationEvent({
-    unitOfWork: container.unitOfWork,
-    handleEvent,
-  })
+  const handlers = {
+    ...userProfileIntegrationEventHandlers,
+  } satisfies IntegrationEventHandlers
 
   return {
-    incomingRoutes: createIntegrationEventsRoutes({
-      consumerToken: container.env.EVENT_CONSUMER_TOKEN,
-      receiveIntegrationEvent,
-    }),
+    incomingRoutes: createIncomingModule(container, handlers),
   }
 }
+
+export type IntegrationEventsModule =
+  ReturnType<typeof createIntegrationEventsModule>
