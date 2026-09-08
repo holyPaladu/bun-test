@@ -1,6 +1,8 @@
-import { UserProfileRepository } from '@/modules/user-profile/repo/user-profile.repository'
+import type { UserProfileRepository } from '@/modules/user-profile/repo/user-profile.repository'
+import { createPostgresUserProfileRepository } from '@/modules/user-profile/repo/postgres-user-profile.repository'
 import type { DatabaseClient } from '@/shared/database/client'
-import { InboxRepository } from '@/modules/integration-events/inbox.repository'
+import type { InboxRepository } from '@/modules/integration-events/incoming/repo/inbox.repository'
+import { createPostgresInboxRepository } from '@/modules/integration-events/incoming/repo/postgres-inbox.repository'
 
 /** Репозитории, привязанные к одной DB-транзакции user-service. */
 export interface UserTransactionRepositories {
@@ -18,7 +20,7 @@ export interface UserUnitOfWork {
 /** PostgreSQL-сборка транзакционных репозиториев user-service. */
 export const createUserUnitOfWork = (sql: DatabaseClient): UserUnitOfWork => ({
   run: work => sql.begin(transaction => work({
-    userProfiles: UserProfileRepository(transaction),
-    inbox: InboxRepository(transaction),
+    userProfiles: createPostgresUserProfileRepository(transaction),
+    inbox: createPostgresInboxRepository(transaction),
   })),
 })

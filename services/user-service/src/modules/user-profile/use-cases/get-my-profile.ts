@@ -3,14 +3,16 @@ import type { UserProfileRepository } from '@/modules/user-profile/repo/user-pro
 import { NotFoundError } from '@/shared/errors/app-error'
 
 interface GetMyProfileDeps {
-  userProfileRepository: UserProfileRepository
+  userProfiles: Pick<UserProfileRepository, 'findById'>
 }
 
-export const GetMyProfileUseCase = ({ userProfileRepository }: GetMyProfileDeps) =>
-  async (userId: string): Promise<UserProfile> => {
-    const profile = await userProfileRepository.findById(userId)
+export interface GetMyProfileInput { userId: string }
+
+export const createGetMyProfileUseCase = ({ userProfiles }: GetMyProfileDeps) =>
+  async ({ userId }: GetMyProfileInput): Promise<UserProfile> => {
+    const profile = await userProfiles.findById(userId)
     if (!profile) throw new NotFoundError('User profile')
     return profile
   }
 
-export type GetMyProfile = ReturnType<typeof GetMyProfileUseCase>
+export type GetMyProfile = ReturnType<typeof createGetMyProfileUseCase>

@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import type { UserProfile } from '@/modules/user-profile/entities/user-profile.entity'
 import type { UserProfileRepository } from '@/modules/user-profile/repo/user-profile.repository'
-import { GetMyProfileUseCase } from '@/modules/user-profile/use-cases/get-my-profile'
+import { createGetMyProfileUseCase } from '@/modules/user-profile/use-cases/get-my-profile'
 import { NotFoundError } from '@/shared/errors/app-error'
 
 const userId = '550e8400-e29b-41d4-a716-446655440000'
@@ -23,7 +23,7 @@ describe('GetMyProfileUseCase', () => {
       update: mock(async () => profile),
     }
 
-    await expect(GetMyProfileUseCase({ userProfileRepository: userProfiles })(userId))
+    await expect(createGetMyProfileUseCase({ userProfiles })({ userId }))
       .resolves.toBe(profile)
     expect(userProfiles.findById).toHaveBeenCalledWith(userId)
     expect(userProfiles.createIfAbsent).not.toHaveBeenCalled()
@@ -36,7 +36,7 @@ describe('GetMyProfileUseCase', () => {
       update: mock(async () => null),
     }
 
-    await expect(GetMyProfileUseCase({ userProfileRepository: userProfiles })(userId))
+    await expect(createGetMyProfileUseCase({ userProfiles })({ userId }))
       .rejects.toBeInstanceOf(NotFoundError)
   })
 })

@@ -2,9 +2,9 @@ import { describe, expect, mock, test } from 'bun:test'
 import { Elysia } from 'elysia'
 import type { UserProfile } from '@/modules/user-profile/entities/user-profile.entity'
 import {
-  UserProfileRoutes,
+  createUserProfileRoutes,
   type UserProfileRoutesDeps,
-} from '@/modules/user-profile/user-profile.routes'
+} from '@/modules/user-profile/http/user-profile.routes'
 import { createErrorHandler } from '@/shared/http/error-handler'
 import { successEnvelope } from '@/shared/http/success-envelope'
 import { JwtVerifierUnavailableError, type JwtVerifier } from '@/shared/lib/jwt/jwt-verifier'
@@ -35,10 +35,12 @@ const validPayload = {
 
 const createTestApp = (overrides: Partial<UserProfileRoutesDeps> = {}) => {
   const noop = () => undefined
-  const getMyProfile = mock(async (id: string) => profile({ id }))
-  const updateMyProfile = mock(async (id: string, input: Partial<UserProfile>) =>
-    profile({ id, ...input }),
-  )
+  const getMyProfile = mock(async ({ userId: id }: { userId: string }) => profile({ id }))
+  const updateMyProfile = mock(async ({ userId: id, ...input }: {
+    userId: string
+    displayName?: string | null
+    locale?: string | null
+  }) => profile({ id, ...input }))
   const jwtVerifier: JwtVerifier = { verify: mock(async () => validPayload) }
 
   const dependencies: UserProfileRoutesDeps = {
@@ -52,7 +54,7 @@ const createTestApp = (overrides: Partial<UserProfileRoutesDeps> = {}) => {
     .use(createErrorHandler({ debug: noop, info: noop, warn: noop, error: noop }))
     .group('/api', group => group
       .use(successEnvelope)
-      .use(UserProfileRoutes(dependencies)),
+      .use(createUserProfileRoutes(dependencies)),
     )
 
   return { app, getMyProfile, updateMyProfile }
@@ -66,7 +68,7 @@ describe('user profile routes', () => {
     }))
 
     expect(response.status).toBe(200)
-    expect(getMyProfile).toHaveBeenCalledWith(userId)
+    expect(getMyProfile).toHaveBeenCalledWith({ userId })
     expect(await response.json()).toEqual({
       data: {
         id: userId,
@@ -92,7 +94,9 @@ describe('user profile routes', () => {
     }))
 
     expect(response.status).toBe(200)
-    expect(updateMyProfile).toHaveBeenCalledWith(userId, { displayName: 'Arsen', locale: 'ru' })
+    expect(updateMyProfile).toHaveBeenCalledWith({
+      userId, displayName: 'Arsen', locale: 'ru',
+    })
   })
 
   test('PATCH /me rejects userId and does not call the use case', async () => {

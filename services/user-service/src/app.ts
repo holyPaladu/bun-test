@@ -14,16 +14,23 @@ import { createIntegrationEventsModule } from '@/modules/integration-events/inte
  * successEnvelope внутри группы scoped-хуком подхватывает и всё, что идёт в
  * родителе после точки подключения (см. success-envelope.ts).
  */
-export const createApp = (container: Container) =>
-  new Elysia()
+export const createApp = (container: Container) => {
+  const userProfile = createUserProfileModule(container)
+  const integrationEvents = createIntegrationEventsModule(
+    container,
+    userProfile.integrationEventHandlers,
+  )
+
+  return new Elysia()
     .use(createErrorHandler(container.logger))
     .use(createAccessLog(container.logger))
     .use(openapiPlugin)
     .use(healthRoute(container.sql))
-    .use(createIntegrationEventsModule(container))
+    .use(integrationEvents.routes)
     .group('/api', app => app
       .use(successEnvelope)
-      .use(createUserProfileModule(container))
+      .use(userProfile.routes)
     )
+}
 
 export type App = ReturnType<typeof createApp>
