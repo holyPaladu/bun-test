@@ -1,11 +1,9 @@
-import type { UserProfileRepository } from '../repo/user-profile.repository'
-
 export interface CreateUserProfileInput {
   userId: string
 }
 
 export const createCreateUserProfileUseCase = (deps: {
-  userProfiles: Pick<UserProfileRepository, 'createIfAbsent'>
+  userProfiles: { createIfAbsent(userId: string): Promise<void> }
 }) => async ({ userId }: CreateUserProfileInput): Promise<void> => {
   await deps.userProfiles.createIfAbsent(userId)
 }

@@ -5,7 +5,10 @@ import { createErrorHandler } from '@/shared/http/error-handler'
 import { healthRoute } from '@/shared/http/routes/health/health.route'
 import { openapiPlugin } from '@/shared/http/openapi'
 import { successEnvelope } from '@/shared/http/success-envelope'
-import { createUserProfileModule } from '@/modules/user-profile/user-profile.module'
+import {
+  createUserProfileEventHandlers,
+  createUserProfileModule,
+} from '@/modules/user-profile/user-profile.module'
 import { createIntegrationEventsModule } from '@/modules/integration-events/integration-events.module'
 
 /**
@@ -15,10 +18,9 @@ import { createIntegrationEventsModule } from '@/modules/integration-events/inte
  * родителе после точки подключения (см. success-envelope.ts).
  */
 export const createApp = (container: Container) => {
-  const userProfile = createUserProfileModule(container)
   const integrationEvents = createIntegrationEventsModule(
     container,
-    userProfile.integrationEventHandlers,
+    createUserProfileEventHandlers(),
   )
 
   return new Elysia()
@@ -26,10 +28,10 @@ export const createApp = (container: Container) => {
     .use(createAccessLog(container.logger))
     .use(openapiPlugin)
     .use(healthRoute(container.sql))
-    .use(integrationEvents.routes)
+    .use(integrationEvents.incomingRoutes)
     .group('/api', app => app
       .use(successEnvelope)
-      .use(userProfile.routes)
+      .use(createUserProfileModule(container))
     )
 }
 

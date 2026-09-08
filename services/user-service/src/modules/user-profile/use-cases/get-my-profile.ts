@@ -1,9 +1,8 @@
 import type { UserProfile } from '@/modules/user-profile/entities/user-profile.entity'
-import type { UserProfileRepository } from '@/modules/user-profile/repo/user-profile.repository'
 import { NotFoundError } from '@/shared/errors/app-error'
 
 interface GetMyProfileDeps {
-  userProfiles: Pick<UserProfileRepository, 'findById'>
+  userProfiles: { findById(userId: string): Promise<UserProfile | null> }
 }
 
 export interface GetMyProfileInput { userId: string }

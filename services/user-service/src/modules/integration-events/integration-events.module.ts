@@ -14,7 +14,7 @@ export const createIntegrationEventsModule = (
   })
 
   return {
-    routes: createIntegrationEventsRoutes({
+    incomingRoutes: createIntegrationEventsRoutes({
       consumerToken: container.env.EVENT_CONSUMER_TOKEN,
       receiveIntegrationEvent,
     }),

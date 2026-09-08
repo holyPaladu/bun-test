@@ -9,19 +9,20 @@ import {
 import { Value } from '@sinclair/typebox/value'
 import { createHandlerRegistry } from '@/modules/integration-events/incoming/handler-registry'
 import { createIntegrationEventsRoutes } from '@/modules/integration-events/incoming/http/integration-events.routes'
-import type { InboxRepository } from '@/modules/integration-events/incoming/repo/inbox.repository'
 import { createReceiveIntegrationEvent } from '@/modules/integration-events/incoming/receive-integration-event'
 import { onAccountCreated } from '@/modules/user-profile/events/on-account-created'
-import type { UserProfileRepository } from '@/modules/user-profile/repo/user-profile.repository'
-import type { UserUnitOfWork } from '@/shared/database/user-unit-of-work'
+import type {
+  UserTransactionRepositories,
+  UserUnitOfWork,
+} from '@/shared/database/user-unit-of-work'
 import { createErrorHandler } from '@/shared/http/error-handler'
 
 const token = 'test-consumer-token'
 const event: AccountCreatedV1 = accountCreatedV1Example
 
-const repositories = (reserve: InboxRepository['reserve']) => {
-  const inbox: InboxRepository = { reserve }
-  const userProfiles: UserProfileRepository = {
+const repositories = (reserve: UserTransactionRepositories['inbox']['reserve']) => {
+  const inbox = { reserve }
+  const userProfiles = {
     createIfAbsent: mock(async () => {}),
     findById: mock(async () => null),
     update: mock(async () => null),
