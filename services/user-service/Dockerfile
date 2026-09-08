@@ -14,18 +14,20 @@ FROM oven/bun:1.4.0-slim AS base
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json bun.lock ./
+WORKDIR /workspace/services/user-service
+COPY services/user-service/package.json services/user-service/bun.lock ./
+COPY packages/integration-event-contracts /workspace/packages/integration-event-contracts
 RUN bun install --frozen-lockfile
 
 # ---- test: обязательный quality gate для любой production-сборки. ----
 # В финальный образ тесты и dev-зависимости не попадут: runtime копирует из
 # build только готовый бинарь сервера и бандл миграций.
 FROM deps AS test
-COPY tsconfig.json ./
-COPY src ./src
-COPY scripts ./scripts
-COPY migrations ./migrations
-COPY tests ./tests
+COPY services/user-service/tsconfig.json ./
+COPY services/user-service/src ./src
+COPY services/user-service/scripts ./scripts
+COPY services/user-service/migrations ./migrations
+COPY services/user-service/tests ./tests
 RUN bun run typecheck && bun test
 
 FROM test AS build
@@ -36,9 +38,9 @@ ENV NODE_ENV=production
 
 # Раскладка повторяет репозиторий: migrate ищет .sql относительно себя
 # (import.meta.dir/../migrations), поэтому бандл лежит именно в scripts/.
-COPY --from=build --chown=bun:bun /app/build/.output ./user-service
-COPY --from=build --chown=bun:bun /app/build/scripts/migrate.js ./scripts/migrate.js
-COPY --chown=bun:bun migrations ./migrations
+COPY --from=build --chown=bun:bun /workspace/services/user-service/build/.output ./user-service
+COPY --from=build --chown=bun:bun /workspace/services/user-service/build/scripts/migrate.js ./scripts/migrate.js
+COPY --chown=bun:bun services/user-service/migrations ./migrations
 
 USER bun
 

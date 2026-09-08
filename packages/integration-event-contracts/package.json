@@ -1,0 +1,11 @@
+{
+  "name": "@test-project/integration-event-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth/account-created.v1": "./src/auth/account-created.v1.ts",
+    "./event-envelope": "./src/event-envelope.ts"
+  }
+}

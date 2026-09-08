@@ -25,7 +25,8 @@ services:
   # ради одного скрипта не нужен отдельный build.
   auth-service:
     build:
-      context: ./services/auth-service
+      context: .
+      dockerfile: services/auth-service/Dockerfile
     image: test-project/auth-service:latest
     env_file:
       - ./services/auth-service/.env
