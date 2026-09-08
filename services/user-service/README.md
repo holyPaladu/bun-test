@@ -7,9 +7,12 @@
 Feature-модули собираются в явно названных `*.module.ts`; `index.ts` не содержит
 composition logic. Общий `container.ts` предоставляет только runtime-инфраструктуру.
 
-Все входящие межсервисные события собраны в плоском модуле
-`modules/integration-events`: контракты, inbox, dispatcher и HTTP-адаптер лежат
-рядом и не смешиваются с публичными profile routes.
+Входящие межсервисные события принимает
+`modules/integration-events/incoming`. Внутри него HTTP-валидация, inbox
+repository, транзакционный use case и dispatcher разделены по ролям.
+Бизнес-модули хранят свои обработчики в `events` и экспортируют их через
+публичный `*.module.ts`; все обработчики связывает
+`integration-events.module.ts`.
 
 ## Локальный запуск
 
@@ -27,7 +30,8 @@ bun run dev
 
 - `GET /health/check` — liveness;
 - `GET /health/ready` — проверка соединения с users database;
-- `POST /internal/events` — защищённый consumer `auth.account-created.v1`;
+- `POST /internal/events` — защищённый consumer поддерживаемых событий
+  (сейчас `auth.account-created.v1`);
 - `GET /api/users/me` — получить существующий профиль по проверенному JWT `sub`;
 - `PATCH /api/users/me` — изменить только `displayName`, `avatarUrl`, `locale` и
   `timezone`.
@@ -38,6 +42,24 @@ OpenAPI UI доступен на `/swagger`, JSON-описание — на `/sw
 доставка того же `eventId` возвращает успешный no-op, поэтому publisher может
 безопасно повторить запрос после сетевого сбоя. Lazy bootstrap удалён: новые
 профили создаёт только consumer integration events.
+
+## Как добавить входящее событие
+
+Версионированный контракт сначала публикует producer в
+`@test-project/integration-event-contracts`. После этого в user-service:
+
+1. добавьте тип в `incoming/types/integration-event.type.ts`;
+2. добавьте runtime-схему в карту `integration-events.schemas.ts`;
+3. создайте `events/on-<fact>.ts` в бизнес-модуле и экспортируйте handler
+   через его `*.module.ts`;
+4. подключите handler map в `integration-events.module.ts` и добавьте ветку
+   в `dispatch-integration-event.ts`;
+5. проверьте валидный и невалидный payload, duplicate и rollback
+   бизнес-эффекта.
+
+TypeScript требует полный набор схем, handlers и веток dispatcher для
+всех типов из `IncomingIntegrationEvent`. HTTP route, inbox repository и
+`receiveIntegrationEvent` при этом не меняются.
 
 ## Нужен ли backfill
 
