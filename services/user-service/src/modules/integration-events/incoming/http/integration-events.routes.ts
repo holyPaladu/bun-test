@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto'
 import { Elysia, t } from 'elysia'
 import {
   accountCreatedV1Schema,
@@ -6,24 +5,16 @@ import {
 } from '@test-project/integration-event-contracts'
 import { UnauthorizedError } from '@/shared/errors/app-error'
 import type { ReceiveIntegrationEvent } from '../receive-integration-event'
+import { hasBearerToken } from './bearer-token'
 
-const integrationEventSchema = t.Union([
-  t.Unsafe<AccountCreatedV1>(accountCreatedV1Schema),
-])
-
-const hasValidBearerToken = (authorization: string | undefined, expected: string): boolean => {
-  if (!authorization?.startsWith('Bearer ')) return false
-  const actual = Buffer.from(authorization.slice('Bearer '.length))
-  const wanted = Buffer.from(expected)
-  return actual.length === wanted.length && timingSafeEqual(actual, wanted)
-}
+const integrationEventSchema = t.Unsafe<AccountCreatedV1>(accountCreatedV1Schema)
 
 export const createIntegrationEventsRoutes = (deps: {
   consumerToken: string
   receiveIntegrationEvent: ReceiveIntegrationEvent
 }) => new Elysia({ prefix: '/internal', tags: ['internal'] })
   .post('/events', async ({ headers, body, set }) => {
-    if (!hasValidBearerToken(headers.authorization, deps.consumerToken)) {
+    if (!hasBearerToken(headers.authorization, deps.consumerToken)) {
       throw new UnauthorizedError()
     }
     const accepted = await deps.receiveIntegrationEvent(body)

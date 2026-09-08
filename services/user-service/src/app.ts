@@ -6,9 +6,9 @@ import { healthRoute } from '@/shared/http/routes/health/health.route'
 import { openapiPlugin } from '@/shared/http/openapi'
 import { successEnvelope } from '@/shared/http/success-envelope'
 import {
-  createUserProfileEventHandlers,
   createUserProfileModule,
 } from '@/modules/user-profile/user-profile.module'
+import { onAccountCreated } from '@/modules/user-profile/events/on-account-created'
 import { createIntegrationEventsModule } from '@/modules/integration-events/integration-events.module'
 
 /**
@@ -20,7 +20,7 @@ import { createIntegrationEventsModule } from '@/modules/integration-events/inte
 export const createApp = (container: Container) => {
   const integrationEvents = createIntegrationEventsModule(
     container,
-    createUserProfileEventHandlers(),
+    onAccountCreated,
   )
 
   return new Elysia()

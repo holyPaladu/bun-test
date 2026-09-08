@@ -29,7 +29,6 @@ const envSchema = t.Object({
   EVENT_DELIVERY_TOKEN: t.String({ minLength: 16 }),
   OUTBOX_CRON_PATTERN: t.String({ default: '* * * * * *', minLength: 1 }),
   OUTBOX_CRON_TIMEZONE: t.String({ default: 'UTC', minLength: 1 }),
-  OUTBOX_WORKER_TIMEOUT_MS: t.Number({ default: 10_000, minimum: 100 }),
   LOG_LEVEL: t.Union(
     [t.Literal('debug'), t.Literal('info'), t.Literal('warn'), t.Literal('error')],
     { default: 'info' },

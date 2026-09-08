@@ -1,20 +1,28 @@
-import type { UserUnitOfWork } from '@/shared/database/user-unit-of-work'
-import type { HandlerRegistry, IncomingIntegrationEvent } from './handler-registry'
+import type { AccountCreatedV1 } from '@test-project/integration-event-contracts'
+import type {
+  UserTransactionRepositories,
+  UserUnitOfWork,
+} from '@/shared/database/user-unit-of-work'
+
+export type HandleIntegrationEvent = (
+  event: AccountCreatedV1,
+  repositories: UserTransactionRepositories,
+) => Promise<void>
 
 export interface ReceiveIntegrationEventDeps {
   unitOfWork: UserUnitOfWork
-  handlers: HandlerRegistry
+  handleEvent: HandleIntegrationEvent
 }
 
 /** Inbox и бизнес-эффект выполняются в одной транзакции и подтверждаются после commit. */
 export const createReceiveIntegrationEvent = ({
   unitOfWork,
-  handlers,
-}: ReceiveIntegrationEventDeps) => (event: IncomingIntegrationEvent): Promise<boolean> =>
+  handleEvent,
+}: ReceiveIntegrationEventDeps) => (event: AccountCreatedV1): Promise<boolean> =>
   unitOfWork.run(async repositories => {
     const firstDelivery = await repositories.inbox.reserve(event)
     if (!firstDelivery) return false
-    await handlers.handle(event, repositories)
+    await handleEvent(event, repositories)
     return true
   })
 

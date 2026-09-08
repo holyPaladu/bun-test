@@ -7,13 +7,7 @@ import {
 import { createDeliveryMetrics } from '@/modules/integration-events/outgoing/metrics/delivery.metrics'
 import {
   createOutboxCron,
-  OutboxWorkerTransportError,
-  requestWorkerRun,
 } from '@/modules/integration-events/outgoing/outbox.cron'
-import type {
-  OutboxWorkerCommand,
-  OutboxWorkerResult,
-} from '@/modules/integration-events/outgoing/outbox-worker.messages'
 import { createOutboxRepository } from '@/modules/integration-events/outgoing/repo/outbox.repository'
 import { createPrometheusRegistry } from '@/shared/http/routes/metrics/prometheus.registry'
 import type { Logger } from '@/shared/lib/logger/logger'
@@ -54,7 +48,7 @@ const deliver = (
   logger,
   random: () => 0.5,
   options: {
-    workerId: 'worker-a', batchSize: 10, leaseMs: 30_000,
+    publisherId: 'publisher-a', batchSize: 10, leaseMs: 30_000,
     maxAttempts: 3, baseRetryMs: 100, maxRetryMs: 1_000,
   },
 })
@@ -67,7 +61,7 @@ describe('deliverPendingEvents', () => {
     expect(sendEvent).toHaveBeenCalledWith(event)
     expect(outbox.markPublished).toHaveBeenCalledWith({
       eventId: event.eventId,
-      leaseOwner: 'worker-a',
+      leaseOwner: 'publisher-a',
     })
   })
 
@@ -88,7 +82,7 @@ describe('deliverPendingEvents', () => {
     }))()
     expect(outbox.markDeadLettered).toHaveBeenCalledWith({
       eventId: event.eventId,
-      leaseOwner: 'worker-a',
+      leaseOwner: 'publisher-a',
       error: 'Consumer responded with HTTP 422',
     })
   })
@@ -101,7 +95,7 @@ describe('deliverPendingEvents', () => {
     const run = createDeliverPendingEvents({
       outbox, sendEvent: mock(async () => {}), metrics, logger,
       options: {
-        workerId: 'stale-worker', batchSize: 1, leaseMs: 30_000,
+        publisherId: 'stale-publisher', batchSize: 1, leaseMs: 30_000,
         maxAttempts: 3, baseRetryMs: 100, maxRetryMs: 1_000,
       },
     })
@@ -117,7 +111,7 @@ describe('deliverPendingEvents', () => {
       metrics: { recordAttempt: () => { throw new Error('metrics unavailable') } },
       logger,
       options: {
-        workerId: 'worker-a', batchSize: 1, leaseMs: 30_000,
+        publisherId: 'publisher-a', batchSize: 1, leaseMs: 30_000,
         maxAttempts: 3, baseRetryMs: 100, maxRetryMs: 1_000,
       },
     })
@@ -175,94 +169,19 @@ describe('delivery metrics', () => {
   })
 })
 
-class FakeWorker extends EventTarget {
-  readonly postMessage = mock((_command: OutboxWorkerCommand) => {})
-  readonly terminate = mock(() => {})
-
-  respond(result: OutboxWorkerResult): void {
-    this.dispatchEvent(new MessageEvent('message', { data: result }))
-  }
-}
-
-describe('outbox worker IPC', () => {
-  test('waits for the matching response and forwards metric observations', async () => {
-    const fake = new FakeWorker()
-    const recordAttempt = mock(() => {})
-    const run = requestWorkerRun(fake as unknown as Worker, {
-      timeoutMs: 100,
-      requestId: 'request-1',
-      recordAttempt,
-    })
-
-    expect(fake.postMessage).toHaveBeenCalledWith({
-      type: 'deliver-pending-events', requestId: 'request-1',
-    })
-    fake.respond({
-      type: 'delivery-attempt',
-      requestId: 'request-1',
-      observation: {
-        eventType: event.type,
-        outcome: 'published',
-        durationSeconds: 0.25,
-        occurredAt: event.occurredAt,
-        completedAt: '2026-09-07T10:00:01.000Z',
-      },
-    })
-    fake.respond({ type: 'completed', requestId: 'request-1' })
-
-    await expect(run).resolves.toBeUndefined()
-    expect(recordAttempt).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: event.type,
-      outcome: 'published',
-      occurredAt: new Date(event.occurredAt),
-    }))
-  })
-
-  test('rejects a failed response, crash, and timeout', async () => {
-    const failed = new FakeWorker()
-    const failedRun = requestWorkerRun(failed as unknown as Worker, {
-      timeoutMs: 100, requestId: 'failed', recordAttempt: () => {},
-    })
-    failed.respond({ type: 'failed', requestId: 'failed', error: 'database unavailable' })
-    await expect(failedRun).rejects.toThrow('database unavailable')
-
-    const crashed = new FakeWorker()
-    const crashedRun = requestWorkerRun(crashed as unknown as Worker, {
-      timeoutMs: 100, requestId: 'crashed', recordAttempt: () => {},
-    })
-    crashed.dispatchEvent(new Event('close'))
-    await expect(crashedRun).rejects.toBeInstanceOf(OutboxWorkerTransportError)
-
-    const timedOut = new FakeWorker()
-    await expect(requestWorkerRun(timedOut as unknown as Worker, {
-      timeoutMs: 1, requestId: 'timeout', recordAttempt: () => {},
-    })).rejects.toThrow('timed out')
-  })
-
-  test('cron restarts a closed worker and terminates the active worker on app stop', async () => {
-    const workers: FakeWorker[] = []
+describe('outbox cron', () => {
+  test('runs the publisher and stops the schedule with the app', async () => {
+    const deliverPendingEvents = mock(async () => {})
     const app = createOutboxCron(logger, {
       pattern: '0 0 1 1 *',
       timezone: 'UTC',
-      timeoutMs: 100,
-      recordAttempt: () => {},
-      createWorker: () => {
-        const worker = new FakeWorker()
-        worker.postMessage.mockImplementation(command => queueMicrotask(() => {
-          worker.respond({ type: 'completed', requestId: command.requestId })
-        }))
-        workers.push(worker)
-        return worker as unknown as Worker
-      },
+      deliverPendingEvents,
     }).listen(0)
 
-    expect(workers).toHaveLength(1)
-    workers[0]!.dispatchEvent(new Event('close'))
     await app.store.cron.outboxDelivery.trigger()
-    expect(workers).toHaveLength(2)
+    expect(deliverPendingEvents).toHaveBeenCalledTimes(1)
 
     await app.stop()
-    expect(workers[1]!.terminate).toHaveBeenCalledTimes(1)
     expect(app.store.cron.outboxDelivery.isStopped()).toBe(true)
   })
 })

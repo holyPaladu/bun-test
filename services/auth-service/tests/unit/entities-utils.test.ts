@@ -96,7 +96,6 @@ describe('environment configuration', () => {
       NODE_ENV: 'development', PORT: 4567, JWT_ISSUER: 'auth-service', JWT_AUDIENCE: 'api',
       JWT_EXPIRES_IN: '15m', REFRESH_TOKEN_TTL_DAYS: 7, SESSION_ABSOLUTE_TTL_DAYS: 90,
       OUTBOX_CRON_PATTERN: '* * * * * *', OUTBOX_CRON_TIMEZONE: 'UTC',
-      OUTBOX_WORKER_TIMEOUT_MS: 10_000,
       LOG_LEVEL: 'info',
     })
   })

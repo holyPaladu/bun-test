@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { ACCOUNT_CREATED_V1, type AccountCreatedV1 } from '@test-project/integration-event-contracts'
-import { createHandlerRegistry } from '@/modules/integration-events/incoming/handler-registry'
 import { createReceiveIntegrationEvent } from '@/modules/integration-events/incoming/receive-integration-event'
 import { onAccountCreated } from '@/modules/user-profile/events/on-account-created'
 import { createUserUnitOfWork } from '@/shared/database/user-unit-of-work'
@@ -58,12 +57,10 @@ run('incoming integration events on PostgreSQL', () => {
   test('rolls back inbox when the business handler fails', async () => {
     const receive = createReceiveIntegrationEvent({
       unitOfWork: createUserUnitOfWork(sql),
-      handlers: createHandlerRegistry({
-        [ACCOUNT_CREATED_V1]: async (incoming, repositories) => {
-          await repositories.userProfiles.createIfAbsent(incoming.data.userId)
-          throw new Error('handler failed')
-        },
-      }),
+      handleEvent: async (incoming, repositories) => {
+        await repositories.userProfiles.createIfAbsent(incoming.data.userId)
+        throw new Error('handler failed')
+      },
     })
     await expect(receive(event)).rejects.toThrow('handler failed')
 
@@ -78,7 +75,7 @@ run('incoming integration events on PostgreSQL', () => {
   test('concurrent delivery applies the handler once', async () => {
     const receive = createReceiveIntegrationEvent({
       unitOfWork: createUserUnitOfWork(sql),
-      handlers: createHandlerRegistry({ [ACCOUNT_CREATED_V1]: onAccountCreated }),
+      handleEvent: onAccountCreated,
     })
     const results = await Promise.all([receive(event), receive(event)])
     expect(results.sort()).toEqual([false, true])

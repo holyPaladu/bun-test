@@ -1,10 +1,8 @@
 import type { Container } from '@/container'
-import { ACCOUNT_CREATED_V1 } from '@test-project/integration-event-contracts'
 import { createUserProfileRepository } from './repo/user-profile.repository'
 import { createUserProfileRoutes } from './http/user-profile.routes'
 import { createGetMyProfileUseCase } from './use-cases/get-my-profile'
 import { createUpdateMyProfileUseCase } from './use-cases/update-my-profile'
-import { onAccountCreated } from './events/on-account-created'
 
 /** Собирает profile repository, use cases и HTTP routes. */
 export const createUserProfileModule = (
@@ -18,8 +16,3 @@ export const createUserProfileModule = (
     updateMyProfile: createUpdateMyProfileUseCase({ userProfiles }),
   })
 }
-
-/** Event handlers are a separate public capability from the HTTP plugin. */
-export const createUserProfileEventHandlers = () => ({
-  [ACCOUNT_CREATED_V1]: onAccountCreated,
-})

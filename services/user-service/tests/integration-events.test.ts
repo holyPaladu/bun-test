@@ -7,7 +7,6 @@ import {
   type AccountCreatedV1,
 } from '@test-project/integration-event-contracts'
 import { Value } from '@sinclair/typebox/value'
-import { createHandlerRegistry } from '@/modules/integration-events/incoming/handler-registry'
 import { createIntegrationEventsRoutes } from '@/modules/integration-events/incoming/http/integration-events.routes'
 import { createReceiveIntegrationEvent } from '@/modules/integration-events/incoming/receive-integration-event'
 import { onAccountCreated } from '@/modules/user-profile/events/on-account-created'
@@ -35,7 +34,7 @@ const repositories = (reserve: UserTransactionRepositories['inbox']['reserve']) 
 
 const receiver = (unitOfWork: UserUnitOfWork) => createReceiveIntegrationEvent({
   unitOfWork,
-  handlers: createHandlerRegistry({ [ACCOUNT_CREATED_V1]: onAccountCreated }),
+  handleEvent: onAccountCreated,
 })
 
 describe('account-created integration event', () => {

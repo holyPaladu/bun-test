@@ -1,5 +1,5 @@
 import type { AccountCreatedV1 as OutgoingIntegrationEvent } from '@test-project/integration-event-contracts'
-import { EventDeliveryError } from '../deliver-pending-events'
+import { EventDeliveryError } from '../delivery-error'
 
 export interface SendEventHttpOptions {
   url: string

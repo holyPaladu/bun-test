@@ -76,7 +76,6 @@ const createContext = (): TestContext => {
       EVENT_DELIVERY_TOKEN: 'test-delivery-token',
       OUTBOX_CRON_PATTERN: '* * * * * *',
       OUTBOX_CRON_TIMEZONE: 'UTC',
-      OUTBOX_WORKER_TIMEOUT_MS: 10_000,
       LOG_LEVEL: 'error',
     },
   }
