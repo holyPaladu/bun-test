@@ -65,10 +65,11 @@ Publisher забирает события lease-пакетами через `FOR
 доставляет их at-least-once на `USER_EVENTS_URL`. `EVENT_DELIVERY_TOKEN` должен
 совпадать с `EVENT_CONSUMER_TOKEN` user-service. Сетевые ошибки и ответы не-2xx
 получают экспоненциальную задержку от 1 секунды до 5 минут; после 10 попыток
-событие переходит в DLQ. Доставку запускает `@elysia/cron`, а сам цикл работает
-в отдельном Bun Worker. Расписание, timezone и IPC-timeout задаются через
-`OUTBOX_CRON_PATTERN`, `OUTBOX_CRON_TIMEZONE` и `OUTBOX_WORKER_TIMEOUT_MS`;
-retry/lease policy остаётся рядом с worker entrypoint.
+событие переходит в DLQ. Доставку запускает `@elysia/cron` прямо в процессе
+сервиса: цикл состоит только из асинхронных SQL/HTTP-операций, поэтому отдельный
+Bun Worker ему не нужен. Расписание и timezone задаются через
+`OUTBOX_CRON_PATTERN` и `OUTBOX_CRON_TIMEZONE`; retry/lease policy находится в
+composition root модуля integration-events.
 
 Перед ручным replay сначала устранить причину и проверить `last_error`. Возврат
 конкретного события из DLQ безопасен, поскольку consumer идемпотентен:

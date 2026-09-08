@@ -94,7 +94,7 @@ worker, handler или route. Отдельный файл `<name>.port.ts` со�
 | Правило | Зачем |
 |---|---|
 | `server.ts` создаёт app и обрабатывает сигналы процесса | Импорт не запускает процесс; остановка app активирует cleanup плагинов |
-| Фоновая работа выполняется в Bun `Worker`, созданном через `new Worker(...)` | Фоновая задача не блокирует HTTP-thread; граница потоков видна в коде |
+| I/O-bound фоновая работа запускается cron-адаптером в процессе сервиса | Для асинхронных SQL/HTTP-операций не создаётся лишняя граница потоков и IPC |
 | Расписание задаёт `@elysia/cron`, а не собственные `start`/`stop` или таймеры | Lifecycle задачи принадлежит Elysia-плагину и подключается через `.use(...)` |
 | `container.ts` создаёт только общую инфраструктуру | Feature-зависимости не расползаются по приложению |
 | `*.module.ts` собирает feature из SQL-адаптеров, use cases и routes | Место связывания зависимостей видно по имени модуля |
@@ -184,9 +184,8 @@ export const createUserProfileModule = (
 ```
 
 Не возвращать `{ routes }`: публичный feature имеет одну естественную форму —
-плагин. Если модулю также нужны handlers входящих событий, они собираются
-отдельной фабрикой `create<Name>EventHandlers()`, чтобы форма HTTP-модуля не
-менялась.
+плагин. Обработчики входящих событий остаются функциями бизнес-модуля и явно
+передаются в integration-events composition root.
 
 ### Модуль без HTTP и фоновые задачи
 
@@ -199,7 +198,7 @@ export const createUserProfileModule = (
 
 - `incomingRoutes` — приём входящих сообщений;
 - `metricsRoutes` — технические метрики;
-- `outboxCron` — готовый Elysia-плагин с cron-расписанием и Bun Worker;
+- `outboxCron` — готовый Elysia-плагин с cron-расписанием;
 - `replayDeadLettered` — ручной replay, когда сервис владеет outbox.
 
 Экспортируются только реализованные возможности. `server.ts` создаёт модуль один
@@ -213,123 +212,53 @@ return new Elysia()
   // ...
 ```
 
-#### Bun Worker и cron
+#### Cron и publisher
 
-Файл `*.worker.ts` — entrypoint настоящего
-[Bun Worker](https://bun.com/docs/runtime/workers), а не фабрика объекта с
-таймером. Файлы фоновой задачи располагаются рядом:
+Доставка состоит из асинхронных SQL- и HTTP-операций, поэтому выполняется в
+процессе сервиса. Bun Worker здесь не ускоряет работу, зато требует отдельного
+entrypoint, повторной сборки зависимостей и IPC для результатов и метрик.
+Файлы фоновой задачи располагаются рядом:
 
 ```text
 modules/integration-events/outgoing/
+├── deliver-event.ts
 ├── deliver-pending-events.ts
-├── outbox.cron.ts
-├── outbox.worker.ts
-└── outbox-worker.messages.ts
+├── delivery-error.ts
+├── retry-policy.ts
+└── outbox.cron.ts
 ```
-
-Cron-адаптер создаёт worker явно:
-
-```ts
-const worker = new Worker(
-  new URL('./outbox.worker.ts', import.meta.url).href,
-)
-```
-
-`new Worker(...)` сразу запускает отдельный JavaScript-instance в
-другом потоке. Собственные `createOutboxWorker`, `start`, `stop`,
-`setInterval` и рекурсивный `setTimeout` для расписания не
-используются.
 
 Расписание описывается плагином
 [`@elysia/cron`](https://elysiajs.com/plugins/cron). Это актуальное имя
 официального пакета; имя `@elysiajs/cron` не используется. Пакет
 добавляется в runtime dependencies командой `bun add @elysia/cron`. В
-шестипольном pattern первое поле — секунды. Cron callback отправляет
-worker-у команду через `postMessage` и возвращает `Promise`, который
-завершается только после ответа worker-а:
+шестипольном pattern первое поле — секунды. Cron callback возвращает Promise
+самого publisher-а:
 
 ```ts
-export const createOutboxCron = (logger: Logger) => {
-  let worker: Worker | undefined
-
-  return new Elysia({ name: 'outbox-cron' })
-    .use(cron({
-      name: 'outboxDelivery',
-      pattern: '* * * * * *',
-      paused: true,
-      protect: true,
-      catch: error => logger.error('Outbox worker failed', { error }),
-      run: () => requestWorkerRun(worker!, { type: 'deliver-pending-events' }),
-    }))
-    .onStart(({ store }) => {
-      worker = new Worker(
-        new URL('./outbox.worker.ts', import.meta.url).href,
-      )
-      store.cron.outboxDelivery.resume()
-    })
-    .onStop(({ store }) => {
-      store.cron.outboxDelivery.stop()
-      worker?.terminate()
-    })
-}
+return new Elysia({ name: 'outbox-cron' })
+  .use(cron({
+    name: 'outboxDelivery',
+    pattern: options.pattern,
+    paused: true,
+    protect: true,
+    catch: error => logger.error('Outbox delivery failed', { error }),
+    run: options.deliverPendingEvents,
+  }))
+  .onStart(({ store }) => store.cron.outboxDelivery.resume())
+  .onStop(({ store }) => store.cron.outboxDelivery.stop())
 ```
 
-`paused: true` не даёт фабрике app запустить расписание. Elysia
-активирует cron и создаёт worker в `onStart`; `onStop` останавливает
-именно cron job и завершает native worker. Эти lifecycle-вызовы
-инкапсулированы в плагине; `server.ts` не вызывает у worker-а
-собственные `start()` и `stop()`.
+`paused: true` не даёт фабрике app запустить расписание. Elysia активирует cron
+в `onStart`, а `onStop` останавливает job. `protect: true` запрещает новый
+cron-run, пока не завершён предыдущий. Конкретные pattern и timezone приходят
+из типизированной config, а не читаются внутри плагина.
 
-`requestWorkerRun` — маленький IPC-адаптер: он связывает request id с
-`message`/`error`/`close`, транслирует ответ в resolve/reject и имеет timeout.
-`protect: true` запрещает новый cron-run, пока не завершён предыдущий. При
-`error` или неожиданном `close` cron-адаптер отклоняет текущий run,
-записывает ошибку и создаёт новый Bun Worker перед следующим trigger.
-Конкретные cron pattern, timezone и timeout берутся из типизированной config,
-а не из env внутри плагина. Bun пока помечает `Worker` API как
-экспериментальный, поэтому `error`, `close` и timeout обрабатываются
-обязательно.
-
-Между потоками нельзя передавать `container`, SQL client, logger, функцию или
-repository. `postMessage` передаёт только явные serializable-команды
-и результаты. Worker entrypoint сам создаёт свой минимальный container и
-устанавливает `self.onmessage` до первого top-level `await`, чтобы не потерять
-раннюю
-команду. Одноразовая инициализация зависимостей кэшируется в
-`Promise` после установки handler-а:
-
-```ts
-declare var self: Worker
-
-let dependencies: Promise<OutboxWorkerDeps> | undefined
-
-self.onmessage = ({ data }: MessageEvent<OutboxWorkerCommand>) => {
-  dependencies ??= createOutboxWorkerDeps()
-
-  void dependencies
-    .then(({ deliverPendingEvents }) => deliverPendingEvents())
-    .then(() => postMessage({
-      type: 'completed',
-      requestId: data.requestId,
-    } satisfies OutboxWorkerResult))
-    .catch(error => postMessage({
-      type: 'failed',
-      requestId: data.requestId,
-      error: errorMessage(error),
-    } satisfies OutboxWorkerResult))
-}
-```
-
-Наблюдения метрик worker отправляет в основной поток сообщениями; там
-они записываются в общий metrics registry, который читает HTTP-route.
-
-Бизнес-цикл, например `deliverPendingEvents`, остаётся обычной async-функцией
-без зависимости от Elysia, cron и `Worker`. Его unit-тесты подставляют ports
-напрямую. Отдельные тесты cron-адаптера проверяют IPC, timeout,
-защиту от перекрытий, restart после crash и cleanup при `app.stop()`.
-
-При `bun build --compile` каждый `*.worker.ts` добавляется отдельным entrypoint;
-одного `src/server.ts` в build-команде недостаточно.
+Бизнес-цикл `deliverPendingEvents` остаётся обычной async-функцией без
+зависимости от Elysia и cron. Она резервирует batch, а соседняя
+`deliver-event.ts` отвечает за одну попытку и фиксацию её результата. Unit-тесты
+подставляют ports напрямую; тест cron-адаптера проверяет запуск и cleanup при
+`app.stop()`.
 
 Служебные routes подключаются до `/api`: error handler, access log, OpenAPI,
 health, JWKS, metrics, `/internal/events`, затем бизнес-routes с
@@ -447,9 +376,9 @@ Consumer проверяет envelope, резервирует `eventId` в inbox 
 
 - Module подключён по своей роли: HTTP-plugin напрямую, технический runtime —
   именованным объектом, cron-задача — готовым Elysia-плагином.
-- Фоновая задача имеет Bun `new Worker(...)`, serializable IPC-протокол,
-  `@elysia/cron` с `protect: true`, timeout/crash handling и cleanup при
-  остановке app.
+- I/O-bound фоновая задача использует `@elysia/cron` с `protect: true` и
+  останавливает расписание вместе с app; отдельный Worker добавляется только для
+  действительно CPU-bound работы.
 - Use case и handler не импортируют `DatabaseClient` или конкретный файл
   `repo/`; его зависимости описаны рядом с потребляющей функцией.
 - SQL, DB row, mapper и DB error mapping находятся в `repo/`; в проекте нет
