@@ -1,6 +1,13 @@
 # План стандартизации integration events, use cases и репозиториев
 
-Статус: план, реализация не выполнена.
+Статус: реализовано. Рабочие соглашения и рецепты находятся в
+[`integration-events-standard.md`](integration-events-standard.md).
+
+Дополнение: актуальные правила подключения модулей и разделения port/SQL-repository
+закреплены в [едином стандарте структуры сервисов](service-structure-standard.md).
+Примеры `*Repository` для интерфейсов и `postgres-*.repository.ts` ниже
+сохраняют историю этого плана; для нового кода применять `ports/*.port.ts` и
+`repo/*.repository.ts` из нового стандарта. Их перенос в коде ещё предстоит.
 
 ## Цель
 
@@ -215,9 +222,9 @@ export const createGetMyProfileUseCase = ({ userProfiles }: GetMyProfileDeps) =>
 ## 1. Стандартизировать контракты событий и их добавление
 
 Сейчас контракт описан отдельно в
-[auth-service](../../services/auth-service/src/modules/integration-events/events.ts)
+[общем пакете контрактов](../../packages/integration-event-contracts/src/auth/account-created.v1.ts)
 и
-[user-service](../../services/user-service/src/modules/integration-events/events.ts).
+[consumer route](../../services/user-service/src/modules/integration-events/incoming/http/integration-events.routes.ts).
 В [документации разделения сервисов](user-service-separation.md) это намеренное
 решение, поэтому его изменение нужно явно зафиксировать.
 
@@ -244,7 +251,7 @@ runtime-схемы, выведенные из них TypeScript-типы и пр
 ## 2. Сделать понятный стандарт use case в user-service
 
 В
-[ProcessIntegrationEventUseCase](../../services/user-service/src/modules/integration-events/process-integration-event.ts)
+[receiveIntegrationEvent](../../services/user-service/src/modules/integration-events/incoming/receive-integration-event.ts)
 сейчас совмещены выбор обработчика, дедупликация и создание профиля.
 
 Разделить обязанности:
@@ -319,7 +326,7 @@ Outbox-интерфейс разделить по потребителям: use 
 ## 4. Выделить механизм доставки и исправить гонки publisher
 
 В
-[outbox.publisher.ts](../../services/auth-service/src/modules/integration-events/outbox.publisher.ts)
+[deliver-pending-events.ts](../../services/auth-service/src/modules/integration-events/outgoing/deliver-pending-events.ts)
 разделить существующий publisher на три компонента:
 
 | Файл | Фабрика | Результат фабрики |
@@ -367,7 +374,7 @@ Worker получает функцию цикла и параметры запу
 
 ## 5. Сделать metrics понятными и полезными
 
-[OutboxMetrics](../../services/auth-service/src/modules/integration-events/outbox.metrics.ts)
+[deliveryMetrics](../../services/auth-service/src/modules/integration-events/outgoing/metrics/delivery.metrics.ts)
 сейчас объединяет накопление измерений и генерацию Prometheus-текста.
 
 Metrics отвечают на вопрос «как работает доставка». Решение о retry/DLQ

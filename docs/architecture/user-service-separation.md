@@ -8,6 +8,11 @@
 
 ### Соглашение о сборке модулей
 
+Подробные действующие правила и целевые переименования описаны в
+[едином стандарте структуры сервисов](service-structure-standard.md).
+Он уточняет этот план: HTTP-модули подключаются по образцу `auth.module.ts`,
+контракты называются `*Port` и находятся в `ports/`, а `repo/` содержит SQL.
+
 Файл, который собирает repository, use cases и HTTP routes feature-модуля,
 называется явно: `auth.module.ts`, `session.module.ts`,
 `user-profile.module.ts` или `integration-events.module.ts` и экспортирует
@@ -417,8 +422,9 @@ write credentials users DB. Оба секрета выдаются job, а не 
 - после подтверждённой доставки убрать lazy bootstrap.
 
 Реализация также предоставляет `/metrics` с pending/DLQ, возрастом старейшего
-события и delivery lag. Publisher использует lease + `SKIP LOCKED`,
-экспоненциальные повторы и переводит событие в DLQ после настроенного лимита.
+события, длительностью запросов и временем до успешной доставки. Worker
+использует lease с идентификатором владельца + `SKIP LOCKED`, экспоненциальные
+повторы с jitter и переводит событие в DLQ после настроенного лимита.
 Для чистого развёртывания backfill отсутствует как ненужная постоянная
 инфраструктура. Если перед rollout обнаружатся существующие accounts без
 профилей, одноразовая job проектируется под фактический объём и окружение.
@@ -433,26 +439,29 @@ write credentials users DB. Оба секрета выдаются job, а не 
 
 | Файл | Ответственность |
 |---|---|
-| `events.ts` | Версионированные исходящие контракты и общий `IntegrationEvent` union |
-| `outbox.repository.ts` | Только SQL хранения, lease и состояния доставки |
-| `outbox.publisher.ts` | HTTP transport и управление retry/DLQ |
-| `outbox.metrics.ts` | Счётчики доставки и Prometheus-представление |
-| `integration-events.module.ts` | Сборка publisher-а и технического `/metrics` route |
+| `auth/events/create-account-created.event.ts` | Создание доменного события |
+| `integration-events/outgoing/repo/*` | Port outbox и PostgreSQL lease/state implementation |
+| `integration-events/outgoing/deliver-pending-events.ts` | Один цикл retry/DLQ и фиксации результата |
+| `integration-events/outgoing/outbox.worker.ts` | Таймер, start/stop и graceful shutdown |
+| `integration-events/outgoing/http/send-event.http.ts` | Один HTTP-запрос к consumer |
+| `integration-events/outgoing/metrics/delivery.metrics.ts` | Технические измерения доставки |
+| `integration-events.module.ts` | Сборка исходящей доставки |
 
 В `user-service`:
 
 | Файл | Ответственность |
 |---|---|
-| `events.ts` | Runtime-схемы и общий discriminated union входящих событий |
-| `inbox.repository.ts` | Только идемпотентная reservation по `eventId` |
-| `process-integration-event.ts` | Явный dispatcher; для первого события — inbox + профиль |
-| `integration-events.routes.ts` | Аутентификация и HTTP-адаптер consumer-а |
-| `integration-events.module.ts` | Сборка зависимостей модуля |
+| `integration-events/incoming/repo/*` | Port inbox и PostgreSQL implementation |
+| `integration-events/incoming/receive-integration-event.ts` | Общая транзакция inbox + handler |
+| `integration-events/incoming/handler-registry.ts` | Типизированный выбор обработчика |
+| `integration-events/incoming/http/integration-events.routes.ts` | Credentials, schema и HTTP-ответ |
+| `user-profile/events/on-account-created.ts` | Реакция профильного домена на событие |
+| `integration-events.module.ts` | Сборка входящей обработки |
 
-Структура намеренно плоская. Подкаталоги `handlers/`, `events/` или `repositories/`
-следует добавлять только когда файлов соответствующего типа станет несколько.
-Контракт события определён с обеих сторон намеренно: сервисы не импортируют код
-друг друга; совместимость закрепляется contract-тестами.
+Runtime-схема и TypeScript-тип находятся в версионируемом пакете
+`packages/integration-event-contracts`. Сервисы импортируют контракт, но не код
+друг друга. Закрытая schema означает, что любое изменение payload выпускается
+новой версией: consumer начинает принимать её раньше producer-а.
 
 Удаление account проектируется отдельно: auth сначала отзывает все сессии и
 публикует versioned event, после чего users удаляет или анонимизирует профиль.
