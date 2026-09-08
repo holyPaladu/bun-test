@@ -5,7 +5,7 @@ import { createIntegrationEventsModule } from '@/modules/integration-events/inte
 const container = await createContainer()
 const integrationEvents = createIntegrationEventsModule(container)
 const app = createApp(container, integrationEvents).listen(container.env.PORT)
-integrationEvents.publisher.start()
+integrationEvents.outboxWorker.start()
 
 container.logger.info('Server started', {
   url: `http://${app.server?.hostname}:${app.server?.port}`,
@@ -15,7 +15,7 @@ container.logger.info('Server started', {
 const shutdown = async (signal: string) => {
   container.logger.info('Shutting down', { signal })
 
-  await integrationEvents.publisher.stop()
+  await integrationEvents.outboxWorker.stop()
   await app.stop()
   await container.sql.close()
 

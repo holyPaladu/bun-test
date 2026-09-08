@@ -2,15 +2,15 @@ import { Elysia } from 'elysia'
 import { ErrorResponseSchemas } from '@/shared/errors/error-response.schema'
 import { createAuthGuard } from '@/shared/http/guard/auth.guard'
 import type { JwtVerifier } from '@/shared/lib/jwt/jwt-verifier'
-import { AuthSchemas } from '@/modules/auth/schemas/auth.schemas'
+import { AuthSchemas } from './auth.schemas'
 import type { LoginAccount } from '@/modules/auth/use-cases/login-account'
 import type { RegisterAccount } from '@/modules/auth/use-cases/register-account'
 import type { RotateTokens } from '@/modules/session/use-cases/rotate-tokens'
 import type { Logout } from '@/modules/session/use-cases/logout'
 import type { LogoutAll } from '@/modules/session/use-cases/logout-all'
-import { GetSessions } from '../session/use-cases/get-sessions'
-import { RevokeSessionByUserId } from '../session/use-cases/revoke-session-by-user-id'
-import { ChangePassword } from './use-cases/change-password'
+import type { GetSessions } from '@/modules/session/use-cases/get-sessions'
+import type { RevokeSessionByUserId } from '@/modules/session/use-cases/revoke-session-by-user-id'
+import type { ChangePassword } from '@/modules/auth/use-cases/change-password'
 
 export interface AuthRoutesDeps {
   registerAccount: RegisterAccount
@@ -24,7 +24,7 @@ export interface AuthRoutesDeps {
   changePasswordInside: ChangePassword
 }
 
-export const AuthRoutes = (deps: AuthRoutesDeps) =>
+export const createAuthRoutes = (deps: AuthRoutesDeps) =>
   new Elysia({ prefix: '/auth', tags: ['auth'] })
     .model(AuthSchemas)
     .model(ErrorResponseSchemas)

@@ -1,12 +1,12 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { AuthRepository } from '@/modules/auth/repo/auth.repository'
-import { toAuthAccount } from '@/modules/auth/entities/auth-account.entity'
-import type { AuthAccountRow } from '@/modules/auth/entities/auth-account.entity'
+import { createPostgresAuthRepository } from '@/modules/auth/repo/postgres-auth.repository'
+import { toAuthAccount, type AuthAccountRow } from '@/modules/auth/repo/auth.mapper'
 import type { RefreshTokenRow } from '@/modules/session/entities/refresh.entity'
 import type { SessionRow } from '@/modules/session/entities/session.entity'
 import { ChangePasswordUseCase } from '@/modules/auth/use-cases/change-password'
 import { LogoutAllUseCase } from '@/modules/session/use-cases/logout-all'
 import { LogoutUseCase } from '@/modules/session/use-cases/logout'
+import { SessionRepository } from '@/modules/session/repo/session.repository'
 import { RotateTokensUseCase } from '@/modules/session/use-cases/rotate-tokens'
 import {
   AuthAccountBlockedError,
@@ -80,7 +80,7 @@ describe('ChangePasswordUseCase', () => {
     const passwordHasher = hasher()
     const changePassword = ChangePasswordUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
-      authRepository: AuthRepository(database.sql),
+      authRepository: createPostgresAuthRepository(database.sql),
       passwordHasher,
     })
 
@@ -96,7 +96,7 @@ describe('ChangePasswordUseCase', () => {
     const passwordHasher = hasher(false)
     const changePassword = ChangePasswordUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
-      authRepository: AuthRepository(database.sql),
+      authRepository: createPostgresAuthRepository(database.sql),
       passwordHasher,
     })
 
@@ -116,7 +116,7 @@ describe('ChangePasswordUseCase', () => {
     const passwordHasher = hasher(true)
     const changePassword = ChangePasswordUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
-      authRepository: AuthRepository(database.sql),
+      authRepository: createPostgresAuthRepository(database.sql),
       passwordHasher,
     })
 
@@ -135,7 +135,7 @@ describe('ChangePasswordUseCase', () => {
     database.authAccounts.push(authAccountRow({ password_hash: 'hash:concurrent-password' }))
     database.sessions.push(sessionRow())
 
-    const authRepository = AuthRepository(database.sql)
+    const authRepository = createPostgresAuthRepository(database.sql)
     authRepository.findById = mock(async () => toAuthAccount(authAccountRow()))
     const changePassword = ChangePasswordUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
@@ -212,7 +212,9 @@ describe('LogoutAllUseCase', () => {
       sessionRow({ id: '00000000-0000-4000-8000-000000000005', user_id: 'another-user' }),
     )
 
-    await LogoutAllUseCase({ sql: database.sql })(userId)
+    await LogoutAllUseCase({
+      sessionRepository: SessionRepository(database.sql),
+    })(userId)
 
     expect(database.sessions.slice(0, 2).every(row => row.revoked_reason === 'logout_all')).toBe(true)
     expect(database.sessions[2].revoked_at).toBeNull()

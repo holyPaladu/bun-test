@@ -6,6 +6,7 @@ import type { AccessTokenPayload, JwtVerifier } from '@/shared/lib/jwt/jwt-verif
 import type { Logger } from '@/shared/lib/logger/logger'
 import { createInMemoryDatabase, type InMemoryDatabase } from '../helpers/in-memory-database'
 import { createAuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
+import { createPrometheusRegistry } from '@/shared/http/routes/metrics/prometheus.registry'
 
 const password = 'password-123'
 const email = 'user@example.com'
@@ -58,6 +59,7 @@ const createContext = (): TestContext => {
     jwtSigner,
     jwtVerifier,
     unitOfWork: createAuthUnitOfWork(database.sql),
+    metricsRegistry: createPrometheusRegistry(),
     env: {
       NODE_ENV: 'test',
       PORT: 3000,

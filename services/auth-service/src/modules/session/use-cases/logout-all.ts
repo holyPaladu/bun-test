@@ -1,14 +1,12 @@
-import type { DatabaseClient } from '@/shared/database/client'
-import { SessionRepository } from '@/modules/session/repo/session.repository'
+import type { SessionRepository } from '@/modules/session/repo/session.repository'
 
 export interface LogoutAllDeps {
-  sql: DatabaseClient
+  sessionRepository: Pick<SessionRepository, 'revokeAllByUserId'>
 }
 
 /** В отличие от Logout, здесь не нужен конкретный refresh-token — рвём все активные сессии владельца. */
-export const LogoutAllUseCase = ({ sql }: LogoutAllDeps) =>
+export const LogoutAllUseCase = ({ sessionRepository }: LogoutAllDeps) =>
   async (userId: string): Promise<void> => {
-    const sessionRepository = SessionRepository(sql)
     await sessionRepository.revokeAllByUserId(userId, 'logout_all')
   }
 

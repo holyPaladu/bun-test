@@ -1,55 +1,62 @@
 import type { Container } from '@/container'
-import { Elysia } from 'elysia'
-import {
-  HttpEventDeliveryTransport,
-  OutboxPublisher,
-} from '@/modules/integration-events/outbox.publisher'
-import { OutboxRepository } from '@/modules/integration-events/outbox.repository'
-import { OutboxMetrics } from '@/modules/integration-events/outbox.metrics'
+import { createDeliverPendingEvents } from './outgoing/deliver-pending-events'
+import { createHttpEventSender } from './outgoing/http/send-event.http'
+import { createDeliveryMetrics } from './outgoing/metrics/delivery.metrics'
+import { createOutboxWorker } from './outgoing/outbox.worker'
+import { createPostgresOutboxRepository } from './outgoing/repo/postgres-outbox.repository'
+import { createMetricsRoutes } from '@/shared/http/routes/metrics/metrics.routes'
 
 /** Одна видимая policy вместо набора преждевременных deployment-настроек. */
 const OUTBOX_POLICY = {
-  batchSize: 50,
+  // Один цикл обрабатывает доступную ёмкость параллельно и укладывается в lease.
+  batchSize: 10,
   pollIntervalMs: 1_000,
   leaseMs: 30_000,
   maxAttempts: 10,
   baseRetryMs: 1_000,
   maxRetryMs: 300_000,
+  jitterRatio: 0.2,
   requestTimeoutMs: 3_000,
 } as const
 
-/** Собирает outbox repository, publisher и его технические метрики. */
+/** Собирает repository, один delivery cycle, worker и технические метрики. */
 export const createIntegrationEventsModule = (
-  container: Pick<Container, 'env' | 'sql' | 'logger'>,
+  container: Pick<Container, 'env' | 'sql' | 'logger' | 'metricsRegistry'>,
 ) => {
-  const repository = OutboxRepository(container.sql)
-  const metrics = new OutboxMetrics()
-  const metricsRoutes = new Elysia({ tags: ['system'] })
-    .get('/metrics', async ({ set }) => {
-      set.headers['content-type'] = 'text/plain; version=0.0.4; charset=utf-8'
-      return metrics.render(await repository.stats())
-    })
+  const outbox = createPostgresOutboxRepository(container.sql)
+  const deliveryMetrics = createDeliveryMetrics(container.metricsRegistry, 'auth')
+  const deliverPendingEvents = createDeliverPendingEvents({
+    outbox,
+    sendEvent: createHttpEventSender({
+      url: container.env.USER_EVENTS_URL,
+      token: container.env.EVENT_DELIVERY_TOKEN,
+      timeoutMs: OUTBOX_POLICY.requestTimeoutMs,
+    }),
+    metrics: deliveryMetrics,
+    logger: container.logger,
+    options: {
+      workerId: crypto.randomUUID(),
+      batchSize: OUTBOX_POLICY.batchSize,
+      leaseMs: OUTBOX_POLICY.leaseMs,
+      maxAttempts: OUTBOX_POLICY.maxAttempts,
+      baseRetryMs: OUTBOX_POLICY.baseRetryMs,
+      maxRetryMs: OUTBOX_POLICY.maxRetryMs,
+      jitterRatio: OUTBOX_POLICY.jitterRatio,
+    },
+  })
 
   return {
-    metricsRoutes,
-    publisher: new OutboxPublisher({
-      repository,
-      transport: HttpEventDeliveryTransport({
-        url: container.env.USER_EVENTS_URL,
-        token: container.env.EVENT_DELIVERY_TOKEN,
-        timeoutMs: OUTBOX_POLICY.requestTimeoutMs,
-      }),
-      metrics,
-      logger: container.logger,
-      options: {
-        batchSize: OUTBOX_POLICY.batchSize,
-        pollIntervalMs: OUTBOX_POLICY.pollIntervalMs,
-        leaseMs: OUTBOX_POLICY.leaseMs,
-        maxAttempts: OUTBOX_POLICY.maxAttempts,
-        baseRetryMs: OUTBOX_POLICY.baseRetryMs,
-        maxRetryMs: OUTBOX_POLICY.maxRetryMs,
-      },
+    metricsRoutes: createMetricsRoutes({
+      registry: container.metricsRegistry,
+      namespace: 'auth',
+      collectOutboxStats: outbox.getStats,
     }),
+    outboxWorker: createOutboxWorker({
+      deliverPendingEvents,
+      pollIntervalMs: OUTBOX_POLICY.pollIntervalMs,
+      logger: container.logger,
+    }),
+    replayDeadLettered: outbox.replayDeadLettered,
   }
 }
 

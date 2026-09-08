@@ -5,6 +5,10 @@ import { argon2PasswordHasher, type PasswordHasher } from '@/shared/lib/hash/arg
 import { JwtSigner } from '@/shared/lib/jwt/jwt-signer'
 import { JwtVerifier } from '@/shared/lib/jwt/jwt-verifier'
 import { createLogger, type Logger } from '@/shared/lib/logger/logger'
+import {
+  createPrometheusRegistry,
+  type PrometheusRegistry,
+} from '@/shared/http/routes/metrics/prometheus.registry'
 
 export interface Container {
   env: Env
@@ -14,6 +18,7 @@ export interface Container {
   jwtSigner: JwtSigner
   jwtVerifier: JwtVerifier
   unitOfWork: AuthUnitOfWork
+  metricsRegistry: PrometheusRegistry
 }
 
 /**
@@ -39,5 +44,6 @@ export const createContainer = async (env: Env = loadEnv()): Promise<Container> 
       audience: env.JWT_AUDIENCE,
     }),
     unitOfWork: createAuthUnitOfWork(sql),
+    metricsRegistry: createPrometheusRegistry(),
   }
 }

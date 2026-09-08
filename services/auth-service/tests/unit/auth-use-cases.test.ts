@@ -1,8 +1,14 @@
 import { describe, expect, mock, test } from 'bun:test'
+import { t } from 'elysia'
+import { Value } from '@sinclair/typebox/value'
+import {
+  accountCreatedV1Schema,
+  type AccountCreatedV1,
+} from '@test-project/integration-event-contracts'
 import type { AuthRepository } from '@/modules/auth/repo/auth.repository'
 import type { AuthAccount } from '@/modules/auth/entities/auth-account.entity'
 import { LoginAccountUseCase } from '@/modules/auth/use-cases/login-account'
-import { RegisterAccountUseCase } from '@/modules/auth/use-cases/register-account'
+import { createRegisterAccountUseCase } from '@/modules/auth/use-cases/register-account'
 import type { PasswordHasher } from '@/shared/lib/hash/argon2-password-hasher'
 import { AuthAccountBlockedError, UnauthorizedError } from '@/shared/errors/app-error'
 import { createInMemoryDatabase } from '../helpers/in-memory-database'
@@ -35,7 +41,7 @@ describe('RegisterAccountUseCase', () => {
   test('normalizes the email, hashes the password, and stores no plaintext', async () => {
     const database = createInMemoryDatabase()
     const passwordHasher = hasher()
-    const register = RegisterAccountUseCase({
+    const register = createRegisterAccountUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
       passwordHasher,
     })
@@ -61,6 +67,10 @@ describe('RegisterAccountUseCase', () => {
       occurredAt: expect.any(String),
       data: { userId: database.authAccounts[0].id },
     })
+    expect(Value.Check(
+      t.Unsafe<AccountCreatedV1>(accountCreatedV1Schema),
+      database.outboxEvents[0].payload,
+    )).toBe(true)
   })
 
   test('does not insert when password hashing fails', async () => {
@@ -69,7 +79,7 @@ describe('RegisterAccountUseCase', () => {
       hash: mock(async () => { throw new Error('hash failed') }),
       verify: mock(async () => false),
     }
-    const register = RegisterAccountUseCase({
+    const register = createRegisterAccountUseCase({
       unitOfWork: createAuthUnitOfWork(database.sql),
       passwordHasher,
     })

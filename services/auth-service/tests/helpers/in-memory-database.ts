@@ -1,18 +1,19 @@
 import type { DatabaseClient } from '@/shared/database/client'
 import type { RefreshTokenRow } from '@/modules/session/entities/refresh.entity'
 import type { SessionRow, SessionRevokedReason } from '@/modules/session/entities/session.entity'
-import type { AuthAccountRow } from '@/modules/auth/entities/auth-account.entity'
-import type { IntegrationEvent } from '@/modules/integration-events/events'
+import type { AuthAccountRow } from '@/modules/auth/repo/auth.mapper'
+import type { OutgoingIntegrationEvent } from '@/modules/integration-events/outgoing/repo/outbox.repository'
 
 export interface InMemoryOutboxEvent {
   id: string
   event_type: string
   aggregate_id: string
-  payload: IntegrationEvent
+  payload: OutgoingIntegrationEvent
   occurred_at: Date
   attempt_count: number
   next_attempt_at: Date
   locked_until: Date | null
+  lease_owner: string | null
   published_at: Date | null
   dead_lettered_at: Date | null
   last_error: string | null
@@ -64,11 +65,12 @@ export const createInMemoryDatabase = (): InMemoryDatabase => {
         id: values[0] as string,
         event_type: values[1] as string,
         aggregate_id: values[2] as string,
-        payload: JSON.parse(values[3] as string) as IntegrationEvent,
+        payload: JSON.parse(values[3] as string) as OutgoingIntegrationEvent,
         occurred_at: values[4] as Date,
         attempt_count: 0,
         next_attempt_at: now,
         locked_until: null,
+        lease_owner: null,
         published_at: null,
         dead_lettered_at: null,
         last_error: null,
@@ -78,7 +80,7 @@ export const createInMemoryDatabase = (): InMemoryDatabase => {
     }
 
     if (text.startsWith('with candidates as') && text.includes('update outbox_events')) {
-      const [batchSize, leaseMs] = values as [number, number]
+      const [batchSize, leaseMs, leaseOwner] = values as [number, number, string]
       const claimed = outboxEvents
         .filter(event => event.published_at === null && event.dead_lettered_at === null)
         .filter(event => event.next_attempt_at <= now)
@@ -88,38 +90,49 @@ export const createInMemoryDatabase = (): InMemoryDatabase => {
       for (const event of claimed) {
         event.attempt_count += 1
         event.locked_until = new Date(now.getTime() + leaseMs)
+        event.lease_owner = leaseOwner
       }
       return Promise.resolve(clone(claimed))
     }
 
     if (text.startsWith('update outbox_events') && text.includes('set published_at = now()')) {
-      const event = outboxEvents.find(row => row.id === values[0])
-      if (event && !event.dead_lettered_at) {
+      const [eventId, leaseOwner] = values as [string, string]
+      const event = outboxEvents.find(row => row.id === eventId)
+      if (event && event.lease_owner === leaseOwner && event.locked_until! > now
+        && !event.dead_lettered_at) {
         event.published_at = now
         event.locked_until = null
+        event.lease_owner = null
         event.last_error = null
+        return Promise.resolve([{ id: event.id }])
       }
       return Promise.resolve([])
     }
 
     if (text.startsWith('update outbox_events') && text.includes('set next_attempt_at = ?')) {
-      const [nextAttemptAt, lastError, eventId] = values as [Date, string, string]
+      const [nextAttemptAt, lastError, eventId, leaseOwner] = values as [Date, string, string, string]
       const event = outboxEvents.find(row => row.id === eventId)
-      if (event && !event.published_at && !event.dead_lettered_at) {
+      if (event && event.lease_owner === leaseOwner && event.locked_until! > now
+        && !event.published_at && !event.dead_lettered_at) {
         event.next_attempt_at = nextAttemptAt
         event.locked_until = null
+        event.lease_owner = null
         event.last_error = lastError
+        return Promise.resolve([{ id: event.id }])
       }
       return Promise.resolve([])
     }
 
     if (text.startsWith('update outbox_events') && text.includes('set dead_lettered_at = now()')) {
-      const [lastError, eventId] = values as [string, string]
+      const [lastError, eventId, leaseOwner] = values as [string, string, string]
       const event = outboxEvents.find(row => row.id === eventId)
-      if (event && !event.published_at && !event.dead_lettered_at) {
+      if (event && event.lease_owner === leaseOwner && event.locked_until! > now
+        && !event.published_at && !event.dead_lettered_at) {
         event.dead_lettered_at = now
         event.locked_until = null
+        event.lease_owner = null
         event.last_error = lastError
+        return Promise.resolve([{ id: event.id }])
       }
       return Promise.resolve([])
     }

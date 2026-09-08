@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { toAuthAccount } from '@/modules/auth/entities/auth-account.entity'
+import { toAuthAccount } from '@/modules/auth/repo/auth.mapper'
 import { toRefreshToken } from '@/modules/session/entities/refresh.entity'
 import { toSession } from '@/modules/session/entities/session.entity'
 import {

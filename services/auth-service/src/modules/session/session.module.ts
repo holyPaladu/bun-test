@@ -36,7 +36,7 @@ export const createSessionModule = (
       refreshTokenGenerator,
     }),
     logoutAll: LogoutAllUseCase({
-      sql: container.sql,
+      sessionRepository,
     }),
     getSessions: GetSessionsUseCase({
       sessionRepo: sessionRepository,
