@@ -23,3 +23,9 @@ export const integrationEventResponseSchema = t.Object({
   accepted: t.Boolean(),
   duplicate: t.Boolean(),
 })
+
+
+export const integrationSchemas = {
+  'eventBodySchema': integrationEventBodySchema,
+  'eventResponseSchema': integrationEventResponseSchema,
+}

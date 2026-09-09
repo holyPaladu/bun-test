@@ -2,10 +2,7 @@ import { Elysia } from 'elysia'
 import { UnauthorizedError } from '@/shared/errors/app-error'
 import type { ReceiveIntegrationEvent } from '../use-cases/receive-integration-event'
 import { hasBearerToken } from '../utils/bearer-token'
-import {
-  integrationEventBodySchema,
-  integrationEventResponseSchema,
-} from './integration-events.schemas'
+import { integrationSchemas } from './integration-events.schemas'
 
 export const createIntegrationEventsRoutes = (deps: {
   consumerToken: string
@@ -15,6 +12,7 @@ export const createIntegrationEventsRoutes = (deps: {
   tags: ['internal'],
   normalize: false,
 })
+  .model(integrationSchemas)
   .post(
     '/events',
     async ({ headers, body, set }) => {
@@ -26,10 +24,10 @@ export const createIntegrationEventsRoutes = (deps: {
       set.status = accepted ? 202 : 200
       return { accepted, duplicate: !accepted }
     }, {
-      body: integrationEventBodySchema,
+      body: 'eventBodySchema',
       response: {
-        200: integrationEventResponseSchema,
-        202: integrationEventResponseSchema,
+        200: 'eventResponseSchema',
+        202: 'eventResponseSchema',
       },
     },
   )
