@@ -1,5 +1,8 @@
 # user-service
 
+План оставшейся работы и границы ответственности сервиса находятся в
+[`docs/services/user-service-roadmap.md`](../../docs/services/user-service-roadmap.md).
+
 Сервис профилей пользователей. Он принимает access JWT от `auth-service`,
 проверяет его локально через remote JWKS и хранит только профильные данные.
 Приватных JWT-ключей, паролей, refresh-токенов и auth DB credentials здесь нет.

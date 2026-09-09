@@ -1,5 +1,9 @@
 # auth-service
 
+Общий план развития платформы находится в
+[`docs/roadmap.md`](../../docs/roadmap.md). Фактические endpoint-контракты следует
+смотреть в OpenAPI сервиса; README описывает архитектуру и эксплуатацию.
+
 Сервис аутентификации на Bun + Elysia. Владеет учётными записями
 (`auth_accounts`), login email, password hash, статусом доступа, сессиями и
 refresh-токенами. Пользовательские профили принадлежат отдельному
@@ -77,8 +81,20 @@ Production-сборка проходит обязательный quality gate: 
 | Метод | Путь | Описание |
 |---|---|---|
 | `GET` | `/health/check` | Проверка живости |
+| `GET` | `/health/ready` | Проверка соединения с auth database |
 | `GET` | `/metrics` | Outbox delivery/lag/pending/DLQ в формате Prometheus |
+| `GET` | `/.well-known/jwks.json` | Публичные JWT-ключи |
 | `POST` | `/api/auth/register` | Регистрация: 201 / 409 / 422 |
+| `POST` | `/api/auth/login` | Вход и создание сессии |
+| `POST` | `/api/auth/refresh-token` | Атомарная ротация refresh-токена |
+| `POST` | `/api/auth/logout` | Завершение текущей сессии |
+| `POST` | `/api/auth/logout-all` | Завершение всех сессий пользователя |
+| `GET` | `/api/auth/sessions` | Страница активных сессий пользователя |
+| `DELETE` | `/api/auth/session/:id` | Отзыв выбранной сессии пользователя |
+| `PUT` | `/api/auth/change-password` | Смена пароля и отзыв сессий |
+
+Точные body, query, response и security schemas публикуются в OpenAPI UI на
+`/swagger`, JSON-описание — на `/swagger/json`.
 
 После миграции `0006_rename_users_to_auth_accounts.sql` доменная сущность и
 таблица называются `AuthAccount`/`auth_accounts`, а статус входа —
