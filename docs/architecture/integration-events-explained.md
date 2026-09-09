@@ -192,7 +192,7 @@ Outbox можно представить как папку «Исходящие�
 ### 5. Cron запускает доставку ожидающих событий
 
 По умолчанию cron срабатывает каждую секунду. Код расписания находится в
-[`outbox.cron.ts`](../../services/auth-service/src/modules/integration-events/outgoing/outbox.cron.ts).
+[`outbox.cron.ts`](../../services/auth-service/src/modules/integration-events/outgoing/cron/outbox.cron.ts).
 Он напрямую вызывает `deliverPendingEvents()`. Отдельный поток здесь не нужен:
 цикл выполняет только асинхронные SQL- и HTTP-операции, а `protect: true` не
 даёт двум batch пересечься в одном экземпляре сервиса.
@@ -219,9 +219,9 @@ publisher не сможет случайно перезаписать более
 
 ### 7. `deliverPendingEvents` организует одну попытку
 
-[`deliver-pending-events.ts`](../../services/auth-service/src/modules/integration-events/outgoing/deliver-pending-events.ts)
+[`deliver-pending-events.ts`](../../services/auth-service/src/modules/integration-events/outgoing/use-cases/deliver-pending-events.ts)
 резервирует batch, а соседний
-[`deliver-event.ts`](../../services/auth-service/src/modules/integration-events/outgoing/deliver-event.ts)
+[`deliver-event.ts`](../../services/auth-service/src/modules/integration-events/outgoing/use-cases/deliver-event.ts)
 для каждого события:
 
 1. вызывает `sendEvent(event)`;
@@ -262,7 +262,7 @@ Content-Type: application/json
 
 ### 10. Inbox и профиль записываются в одной транзакции
 
-[`receive-integration-event.ts`](../../services/user-service/src/modules/integration-events/incoming/receive-integration-event.ts)
+[`receive-integration-event.ts`](../../services/user-service/src/modules/integration-events/incoming/use-cases/receive-integration-event.ts)
 открывает транзакцию в users DB.
 
 Внутри неё сначала вызывается `inbox.reserve(event)`. Репозиторий пытается
@@ -593,13 +593,13 @@ pending → leased → published
    — какой объект создаётся.
 3. [`outbox.repository.ts`](../../services/auth-service/src/modules/integration-events/outgoing/repo/outbox.repository.ts)
    — как он сохраняется и меняет состояние.
-4. [`deliver-pending-events.ts`](../../services/auth-service/src/modules/integration-events/outgoing/deliver-pending-events.ts)
+4. [`deliver-pending-events.ts`](../../services/auth-service/src/modules/integration-events/outgoing/use-cases/deliver-pending-events.ts)
    — главное решение доставки.
 5. [`send-event.http.ts`](../../services/auth-service/src/modules/integration-events/outgoing/http/send-event.http.ts)
    — один сетевой вызов.
 6. [`integration-events.routes.ts`](../../services/user-service/src/modules/integration-events/incoming/http/integration-events.routes.ts)
    — вход в consumer.
-7. [`receive-integration-event.ts`](../../services/user-service/src/modules/integration-events/incoming/receive-integration-event.ts)
+7. [`receive-integration-event.ts`](../../services/user-service/src/modules/integration-events/incoming/use-cases/receive-integration-event.ts)
    — inbox и handler в одной транзакции.
 8. [`on-account-created.ts`](../../services/user-service/src/modules/user-profile/events/on-account-created.ts)
    — конкретная бизнес-реакция.
@@ -715,5 +715,5 @@ Outbox, HTTP sender, inbox, retry, cron и metrics — инфраструкту�
   обязательные правила и рецепт добавления событий.
 - [Стандарт структуры сервисов](service-structure-standard.md) — расположение
   модулей, use cases, ports и repositories.
-- [Исторический план стандартизации](integration-events-standardization-plan.md)
-  — почему код пришёл к текущей структуре.
+- [Решение по Kafka](kafka-adoption.md) — критерии, после которых текущий HTTP
+  transport стоит заменить брокером.
