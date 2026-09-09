@@ -1,6 +1,10 @@
 import { Value } from '@sinclair/typebox/value'
 import { t } from 'elysia'
 
+const databaseEnvSchema = t.Object({
+  DATABASE_URL: t.String({ minLength: 1 }),
+})
+
 const envSchema = t.Object({
   NODE_ENV: t.Union(
     [t.Literal('development'), t.Literal('test'), t.Literal('production')],
@@ -36,6 +40,22 @@ const envSchema = t.Object({
 })
 
 export type Env = typeof envSchema.static
+export type DatabaseEnv = typeof databaseEnvSchema.static
+
+/** Минимальный конфиг для one-shot миграций, не зависящий от runtime-секретов. */
+export const loadDatabaseEnv = (
+  source: Record<string, string | undefined> = Bun.env,
+): DatabaseEnv => {
+  const candidate = Value.Clean(databaseEnvSchema, { ...source })
+
+  if (Value.Check(databaseEnvSchema, candidate)) return candidate
+
+  const problems = [...Value.Errors(databaseEnvSchema, candidate)]
+    .map(issue => `  ${issue.path || '/'}: ${issue.message}`)
+    .join('\n')
+
+  throw new Error(`Invalid database environment configuration:\n${problems}`)
+}
 
 /**
  * Единственное место в проекте, где читается окружение.

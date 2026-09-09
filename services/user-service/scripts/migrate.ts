@@ -1,11 +1,11 @@
 /** Применяет SQL-миграции по имени, каждую в отдельной транзакции. */
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { loadEnv } from '@/shared/config/env'
+import { loadDatabaseEnv } from '@/shared/config/env'
 import { createDatabaseClient } from '@/shared/database/client'
 
 const migrationsDir = join(import.meta.dir, '..', 'migrations')
-const sql = createDatabaseClient(loadEnv())
+const sql = createDatabaseClient(loadDatabaseEnv())
 
 await sql`
   CREATE TABLE IF NOT EXISTS schema_migrations (

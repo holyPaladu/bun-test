@@ -4,12 +4,12 @@
  */
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { loadEnv } from '@/shared/config/env'
+import { loadDatabaseEnv } from '@/shared/config/env'
 import { createDatabaseClient } from '@/shared/database/client'
 
 const MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations')
 
-const env = loadEnv()
+const env = loadDatabaseEnv()
 const sql = createDatabaseClient(env)
 
 await sql`

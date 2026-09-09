@@ -9,7 +9,7 @@ import {
   UnauthorizedError,
   AuthAccountBlockedError,
 } from '@/shared/errors/app-error'
-import { loadEnv } from '@/shared/config/env'
+import { loadDatabaseEnv, loadEnv } from '@/shared/config/env'
 import { refreshTokenGenerator } from '@/shared/lib/token/refresh-token'
 import { normalizeEmail } from '@/shared/utils/normalizer'
 
@@ -103,5 +103,12 @@ describe('environment configuration', () => {
   test('rejects missing required values and out-of-range numbers', () => {
     expect(() => loadEnv({ ...required, DATABASE_URL: undefined })).toThrow('/DATABASE_URL')
     expect(() => loadEnv({ ...required, PORT: '70000' })).toThrow('/PORT')
+  })
+
+  test('loads migration config without application secrets', () => {
+    expect(loadDatabaseEnv({ DATABASE_URL: required.DATABASE_URL })).toEqual({
+      DATABASE_URL: required.DATABASE_URL,
+    })
+    expect(() => loadDatabaseEnv({})).toThrow('/DATABASE_URL')
   })
 })

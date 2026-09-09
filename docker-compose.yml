@@ -49,8 +49,6 @@ services:
   # бандлом, а не бинарём, — см. Dockerfile.
   auth-migrate:
     image: test-project/auth-service:latest
-    env_file:
-      - ./services/auth-service/.env
     environment:
       DATABASE_URL: postgres://postgres:postgres@auth-postgres:5432/auth
     command: ['bun', '/app/scripts/migrate.js']
@@ -97,8 +95,6 @@ services:
     image: test-project/user-service:latest
     environment:
       DATABASE_URL: postgres://postgres:postgres@user-postgres:5432/users
-      AUTH_JWKS_URL: http://auth-service:3000/.well-known/jwks.json
-      EVENT_CONSUMER_TOKEN: ${EVENT_TOKEN:-replace-with-at-least-16-random-characters}
     command: ['bun', '/app/scripts/migrate.js']
     depends_on:
       user-postgres:
