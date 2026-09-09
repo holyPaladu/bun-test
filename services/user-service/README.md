@@ -26,6 +26,15 @@ bun run dev
 По умолчанию HTTP-сервис слушает `3001`, PostgreSQL users database ожидается на
 `5433`, а JWKS auth-service — на `http://localhost:3000/.well-known/jwks.json`.
 
+## Docker
+
+Из корня репозитория `docker compose up --build` запускает оба сервиса, отдельную
+PostgreSQL для каждого из них и миграции перед стартом приложений. Для запуска
+только user-service с его БД используйте `docker compose up --build user-service`.
+JWT-ключи предварительно должны быть заполнены в `services/auth-service/.env`.
+Общий токен доставки событий можно переопределить через `EVENT_TOKEN` в корневом
+`.env`.
+
 ## API
 
 - `GET /health/check` — liveness;
