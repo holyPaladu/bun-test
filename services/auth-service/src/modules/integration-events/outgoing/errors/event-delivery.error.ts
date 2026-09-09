@@ -9,8 +9,5 @@ export class EventDeliveryError extends Error {
   }
 }
 
-export const errorMessage = (error: unknown): string =>
-  (error instanceof Error ? error.message : String(error)).slice(0, 1_000)
-
 export const isRetryableDeliveryError = (error: unknown): boolean =>
   !(error instanceof EventDeliveryError) || error.retryable

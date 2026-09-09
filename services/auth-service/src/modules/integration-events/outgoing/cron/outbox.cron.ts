@@ -1,7 +1,7 @@
 import { cron } from '@elysia/cron'
 import { Elysia } from 'elysia'
 import type { Logger } from '@/shared/lib/logger/logger'
-import { errorMessage } from './delivery-error'
+import { errorMessage } from '../helpers/error-message'
 
 export interface OutboxCronOptions {
   pattern: string

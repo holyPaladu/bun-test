@@ -1,21 +1,7 @@
-import type { AccountCreatedV1 } from '@test-project/integration-event-contracts'
 import type { DatabaseClient } from '@/shared/database/client'
-
-export type OutgoingIntegrationEvent = AccountCreatedV1
-
-interface OutboxEventRow {
-  id: string
-  payload: OutgoingIntegrationEvent | string
-  occurred_at: Date | string
-  attempt_count: number
-  lease_owner: string
-}
-
-const deserializeEvent = (
-  payload: OutgoingIntegrationEvent | string,
-): OutgoingIntegrationEvent => typeof payload === 'string'
-  ? JSON.parse(payload) as OutgoingIntegrationEvent
-  : payload
+import type { ClaimedOutboxEvent } from '../entities/outbox.entity'
+import type { OutgoingIntegrationEvent } from '../types/integration-event.type'
+import { toClaimedOutboxEvent, type OutboxEventRow } from './outbox.mapper'
 
 /** SQL-adapter for the transactional outbox. */
 export const createOutboxRepository = (sql: DatabaseClient) => ({
@@ -36,7 +22,7 @@ export const createOutboxRepository = (sql: DatabaseClient) => ({
     limit: number
     leaseMs: number
     leaseOwner: string
-  }) => {
+  }): Promise<ClaimedOutboxEvent[]> => {
     const rows = await sql<OutboxEventRow[]>`
       WITH candidates AS (
         SELECT id
@@ -59,13 +45,7 @@ export const createOutboxRepository = (sql: DatabaseClient) => ({
                 event.attempt_count, event.lease_owner
     `
 
-    return rows.map(row => ({
-      id: row.id,
-      event: deserializeEvent(row.payload),
-      occurredAt: row.occurred_at instanceof Date ? row.occurred_at : new Date(row.occurred_at),
-      attemptCount: row.attempt_count,
-      leaseOwner: row.lease_owner,
-    }))
+    return rows.map(toClaimedOutboxEvent)
   },
 
   markPublished: async (input: { eventId: string; leaseOwner: string }): Promise<boolean> => {

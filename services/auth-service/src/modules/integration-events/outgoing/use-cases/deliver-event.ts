@@ -1,13 +1,36 @@
-import { errorMessage, isRetryableDeliveryError } from './delivery-error'
-import type {
-  ClaimedOutboxEvent,
-  DeliverPendingEventsDeps,
-} from './deliver-pending-events'
-import { getRetryDelayMs, shouldDeadLetter } from './retry-policy'
-import type { DeliveryOutcome } from './metrics/delivery.metrics'
+import type { Logger } from '@/shared/lib/logger/logger'
+import type { ClaimedOutboxEvent } from '../entities/outbox.entity'
+import type { OutgoingIntegrationEvent } from '../types/integration-event.type'
+import { isRetryableDeliveryError } from '../errors/event-delivery.error'
+import { errorMessage } from '../helpers/error-message'
+import { getRetryDelayMs, shouldDeadLetter, type RetryPolicy } from '../helpers/retry-policy'
+import type { DeliveryMetrics, DeliveryOutcome } from '../metrics/delivery.metrics'
+
+export interface DeliverEventDeps {
+  outbox: {
+    markPublished(input: { eventId: string; leaseOwner: string }): Promise<boolean>
+    markFailed(input: {
+      eventId: string
+      leaseOwner: string
+      error: string
+      nextAttemptAt: Date
+    }): Promise<boolean>
+    markDeadLettered(input: {
+      eventId: string
+      leaseOwner: string
+      error: string
+    }): Promise<boolean>
+  }
+  sendEvent(event: OutgoingIntegrationEvent): Promise<void>
+  metrics: DeliveryMetrics
+  logger: Pick<Logger, 'warn' | 'error'>
+  options: RetryPolicy
+  now?: () => Date
+  random?: () => number
+}
 
 const recordMetrics = (
-  deps: DeliverPendingEventsDeps,
+  deps: DeliverEventDeps,
   event: ClaimedOutboxEvent,
   outcome: DeliveryOutcome,
   durationSeconds: number,
@@ -29,7 +52,7 @@ const recordMetrics = (
 }
 
 /** Delivers one claimed event and persists exactly one resulting state. */
-export const createDeliverEvent = (deps: DeliverPendingEventsDeps) => {
+export const createDeliverEventUseCase = (deps: DeliverEventDeps) => {
   const now = deps.now ?? (() => new Date())
   const random = deps.random ?? Math.random
 
@@ -39,7 +62,7 @@ export const createDeliverEvent = (deps: DeliverPendingEventsDeps) => {
     durationSeconds: number,
     deliveryError?: unknown,
   ): Promise<void> => {
-    const claim = { eventId: event.id, leaseOwner: event.leaseOwner }
+    const claim = { eventId: event.eventId, leaseOwner: event.leaseOwner }
     let updated: boolean
 
     try {
@@ -60,7 +83,7 @@ export const createDeliverEvent = (deps: DeliverPendingEventsDeps) => {
       }
     } catch (error) {
       deps.logger.error('Failed to persist outbox delivery result', {
-        eventId: event.id,
+        eventId: event.eventId,
         eventType: event.event.type,
         outcome,
         error: errorMessage(error),
@@ -70,7 +93,7 @@ export const createDeliverEvent = (deps: DeliverPendingEventsDeps) => {
 
     if (!updated) {
       deps.logger.warn('Ignored outbox result from stale lease owner', {
-        eventId: event.id,
+        eventId: event.eventId,
         eventType: event.event.type,
         publisherId: event.leaseOwner,
       })
@@ -104,7 +127,7 @@ export const createDeliverEvent = (deps: DeliverPendingEventsDeps) => {
       log(outcome === 'dead_letter'
         ? 'Outbox event moved to dead letter'
         : 'Outbox delivery failed; retry scheduled', {
-        eventId: event.id,
+        eventId: event.eventId,
         eventType: event.event.type,
         attempt: event.attemptCount,
         error: errorMessage(deliveryError),

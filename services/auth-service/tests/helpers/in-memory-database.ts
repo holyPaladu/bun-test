@@ -3,7 +3,7 @@ import type { SessionRevokedReason } from '@/modules/session/entities/session.en
 import type { RefreshTokenRow } from '@/modules/session/repo/refresh-token.mapper'
 import type { SessionRow } from '@/modules/session/repo/session.mapper'
 import type { AuthAccountRow } from '@/modules/auth/repo/auth.mapper'
-import type { OutgoingIntegrationEvent } from '@/modules/integration-events/outgoing/repo/outbox.repository'
+import type { OutgoingIntegrationEvent } from '@/modules/integration-events/outgoing/types/integration-event.type'
 
 export interface InMemoryOutboxEvent {
   id: string

@@ -1,3 +1,4 @@
+/** Pure delivery retry calculations; scheduling belongs to the caller. */
 export interface RetryPolicy {
   maxAttempts: number
   baseRetryMs: number
