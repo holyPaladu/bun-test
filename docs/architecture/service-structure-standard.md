@@ -78,8 +78,9 @@ worker, handler или route. Отдельный файл `<name>.port.ts` со�
   и проверять отдельно.
 
 Такой файл кладётся рядом с главными потребителями, а не в обязательный общий
-`ports/`-каталог. Например, общий контракт исходящей доставки находится рядом с
-`deliver-pending-events.ts`; контракт Unit of Work — рядом с его реализацией в
+`ports/`-каталог. Например, общий контракт исходящей доставки при необходимости
+находится рядом с потребляющими сценариями в `outgoing/use-cases/`;
+контракт Unit of Work — рядом с его реализацией в
 `shared/database/`. Если контракт опять стал нужен одному месту, отдельный файл
 не сохраняют ради симметрии.
 
@@ -217,16 +218,50 @@ return new Elysia()
 Доставка состоит из асинхронных SQL- и HTTP-операций, поэтому выполняется в
 процессе сервиса. Bun Worker здесь не ускоряет работу, зато требует отдельного
 entrypoint, повторной сборки зависимостей и IPC для результатов и метрик.
-Файлы фоновой задачи располагаются рядом:
+Файлы объединяются по возможности, затем по роли внутри неё:
 
 ```text
 modules/integration-events/outgoing/
-├── deliver-event.ts
-├── deliver-pending-events.ts
-├── delivery-error.ts
-├── retry-policy.ts
-└── outbox.cron.ts
+├── outgoing.module.ts
+├── use-cases/
+│   ├── deliver-event.ts
+│   └── deliver-pending-events.ts
+├── errors/
+│   └── event-delivery.error.ts
+├── helpers/
+│   ├── retry-policy.ts
+│   └── error-message.ts
+├── cron/
+│   └── outbox.cron.ts
+├── types/
+│   └── integration-event.type.ts
+├── entities/
+│   └── outbox.entity.ts
+├── repo/
+│   ├── outbox.repository.ts
+│   └── outbox.mapper.ts
+├── http/
+│   └── send-event.http.ts
+└── metrics/
+    └── delivery.metrics.ts
 ```
+
+`outgoing.module.ts` собирает repository, metrics, sender, одну попытку,
+batch-сценарий и cron; корневой `integration-events.module.ts` связывает его
+возможности с metrics route. `errors/` владеет классом и классификацией ошибок
+доставки, `helpers/` — чистыми retry-вычислениями и форматированием ошибок.
+Параллельные `helpers/` и `utils/` для одной роли внутри outgoing не создаются.
+Общий union событий находится в `types/`, модель claim — в `entities/`,
+PostgreSQL row и mapper — в `repo/`; локальные `Deps` остаются у потребителя.
+
+Cron — адаптер запуска сценария по расписанию, поэтому лежит в `cron/` своего
+модуля. Принадлежность Elysia lifecycle не делает его HTTP-адаптером.
+Каждая новая задача получает `cron/<purpose>.cron.ts`, уникальные имена плагина
+и job, своё расписание и lifecycle. При нескольких задачах outgoing module
+собирает их через `.use(...)` в один `outgoingCron`, который app подключает
+один раз; пока задача одна, используется `outboxCron`. `protect` действует
+на отдельную задачу и не синхронизирует разные jobs. Задачи другой feature
+остаются в её собственном `cron/`, а не в общей папке расписаний сервиса.
 
 Расписание описывается плагином
 [`@elysia/cron`](https://elysiajs.com/plugins/cron). Это актуальное имя
@@ -254,9 +289,11 @@ return new Elysia({ name: 'outbox-cron' })
 cron-run, пока не завершён предыдущий. Конкретные pattern и timezone приходят
 из типизированной config, а не читаются внутри плагина.
 
-Бизнес-цикл `deliverPendingEvents` остаётся обычной async-функцией без
-зависимости от Elysia и cron. Она резервирует batch, а соседняя
-`deliver-event.ts` отвечает за одну попытку и фиксацию её результата. Unit-тесты
+Сценарий `use-cases/deliver-pending-events.ts` остаётся обычной async-функцией
+без зависимости от Elysia и cron. Он резервирует batch и вызывает переданную
+функцию `deliverEvent`. Соседний `use-cases/deliver-event.ts` отвечает за одну
+попытку и фиксацию её результата. Фабрики называются
+`createDeliverPendingEventsUseCase` и `createDeliverEventUseCase`. Unit-тесты
 подставляют ports напрямую; тест cron-адаптера проверяет запуск и cleanup при
 `app.stop()`.
 
@@ -307,26 +344,26 @@ Use case импортирует entity и application errors, но не импо
 также передаются как функции или маленькие объекты рядом с потребителем.
 
 ```ts
-// modules/integration-events/outgoing/deliver-pending-events.ts
-type OutboxDeliveryPort = {
-  claimDue(input: ClaimDueInput): Promise<ClaimedOutboxEvent[]>
-  markPublished(input: UpdateClaimInput): Promise<boolean>
-  markFailed(input: FailedDeliveryInput): Promise<boolean>
-}
-
-type SendEvent = (event: OutgoingIntegrationEvent) => Promise<void>
-
+// modules/integration-events/outgoing/use-cases/deliver-pending-events.ts
 type DeliverPendingEventsDeps = {
-  outbox: OutboxDeliveryPort
-  sendEvent: SendEvent
-  logger: Pick<Logger, 'info' | 'warn' | 'error'>
+  outbox: {
+    claimDue(input: {
+      limit: number
+      leaseMs: number
+      leaseOwner: string
+    }): Promise<ClaimedOutboxEvent[]>
+  }
+  deliverEvent(event: ClaimedOutboxEvent): Promise<void>
+  options: { batchSize: number; leaseMs: number; publisherId: string }
 }
 ```
 
-Именно `OutboxDeliveryPort` и `SendEvent` — ports цикла доставки: функция
-принимает их, а module связывает с `createOutboxRepository(sql)` и
-`createHttpEventSender(options)`. Они не обязаны называться repository и не
-должны жить в папке `ports/`.
+Здесь `outbox.claimDue` и `deliverEvent` — ports batch-сценария. Одна попытка
+объявляет собственный `DeliverEventDeps` с `markPublished`, `markFailed`,
+`markDeadLettered`, `sendEvent`, metrics, logger и retry options. Module
+связывает эти контракты с repository и HTTP sender. Batch не получает методы
+записи outcome, а одна попытка не получает claim и batch options. Контракты
+не обязаны называться repository и не требуют папки `ports/`.
 
 Если несколько use cases используют одинаковый полный набор операций, сначала
 проверяется, не является ли это следствием слишком широкого repository. Если
@@ -340,6 +377,10 @@ type DeliverPendingEventsDeps = {
 `create<Action>UseCase(deps)` и возвращает рабочую функцию. В том же файле
 находятся `Input`, результат и минимальный тип зависимостей. HTTP Request,
 HTTP-schema, env и SQL client в use case не передаются.
+
+Use case выражает прикладную цель модуля: это может быть регистрация account,
+приём integration event или доставка outbox. Техническому сценарию не
+обязательно менять бизнес-aggregate, чтобы находиться в `use-cases/`.
 
 Unit of Work — единая транзакционная граница сервиса. В текущем масштабе его
 контракт и SQL-реализация могут лежать вместе в

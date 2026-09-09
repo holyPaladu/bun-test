@@ -9,9 +9,35 @@ PostgreSQL outbox; фоновый publisher доставляет событие 
 Feature-модули собираются в явно названных `*.module.ts`; `index.ts` не содержит
 composition logic. Общий `container.ts` предоставляет только runtime-инфраструктуру.
 
-Межсервисные контракты и механизм их доставки собраны в плоском модуле
-`modules/integration-events`. Он не содержит auth-бизнес-правила: use case
-регистрации только кладёт событие в outbox внутри своей транзакции.
+Механизм доставки находится в `modules/integration-events/outgoing`, общие
+межсервисные контракты — в `packages/integration-event-contracts`.
+Use case регистрации создаёт событие через `auth/events` и кладёт его в outbox
+внутри своей транзакции; HTTP-доставка начинается после commit.
+
+## Структура outgoing
+
+| Путь внутри `modules/integration-events/outgoing/` | Ответственность |
+|---|---|
+| `outgoing.module.ts` | Сборка repository, metrics, sender, use cases и cron |
+| `use-cases/deliver-pending-events.ts` | Claim одного batch и параллельный вызов доставки каждого события |
+| `use-cases/deliver-event.ts` | Одна попытка и запись published/retry/DLQ с проверкой lease owner |
+| `errors/event-delivery.error.ts` | Ошибка транспорта и классификация возможности повтора |
+| `helpers/retry-policy.ts`, `helpers/error-message.ts` | Чистые retry-вычисления и ограниченное по длине сообщение ошибки |
+| `cron/outbox.cron.ts` | Расписание, защита от overlap и lifecycle задачи |
+| `types/integration-event.type.ts` | Единый union исходящих контрактов |
+| `entities/outbox.entity.ts` | Зарезервированное событие `ClaimedOutboxEvent` |
+| `repo/outbox.repository.ts`, `repo/outbox.mapper.ts` | SQL, модель PostgreSQL row и преобразование в entity |
+| `http/send-event.http.ts` | HTTP-запрос к consumer-у |
+| `metrics/delivery.metrics.ts` | Метрики попыток, длительности и задержки доставки |
+
+`integration-events.module.ts` связывает outgoing с общим `/metrics` и
+экспортирует `outboxCron`, `metricsRoutes`, `replayDeadLettered`. `server.ts`
+создаёт модуль один раз и передаёт его в `createApp`.
+
+Каждая следующая задача по расписанию получает свой `cron/<purpose>.cron.ts`
+в модуле-владельце и уникальные имена плагина и job. Несколько задач outgoing
+собираются в `outgoing.module.ts` в единый `outgoingCron`. Cron вызывает
+прикладной сценарий; HTTP-адаптеры остаются в `http/`.
 
 ## Запуск
 
@@ -63,13 +89,15 @@ Production-сборка проходит обязательный quality gate: 
 
 Publisher забирает события lease-пакетами через `FOR UPDATE SKIP LOCKED` и
 доставляет их at-least-once на `USER_EVENTS_URL`. `EVENT_DELIVERY_TOKEN` должен
-совпадать с `EVENT_CONSUMER_TOKEN` user-service. Сетевые ошибки и ответы не-2xx
-получают экспоненциальную задержку от 1 секунды до 5 минут; после 10 попыток
-событие переходит в DLQ. Доставку запускает `@elysia/cron` прямо в процессе
+совпадать с `EVENT_CONSUMER_TOKEN` user-service. Сетевые ошибки, HTTP 408, 429
+и 5xx получают exponential retry: базовая задержка от 1 секунды до 5 минут,
+затем jitter ±20% (итог может достигать 6 минут). После 10 попыток событие
+переходит в DLQ; остальные 4xx отправляются в DLQ сразу.
+Доставку запускает `@elysia/cron` прямо в процессе
 сервиса: цикл состоит только из асинхронных SQL/HTTP-операций, поэтому отдельный
 Bun Worker ему не нужен. Расписание и timezone задаются через
 `OUTBOX_CRON_PATTERN` и `OUTBOX_CRON_TIMEZONE`; retry/lease policy находится в
-composition root модуля integration-events.
+`outgoing/outgoing.module.ts`.
 
 Перед ручным replay сначала устранить причину и проверить `last_error`. Возврат
 конкретного события из DLQ безопасен, поскольку consumer идемпотентен:
@@ -80,9 +108,34 @@ SET dead_lettered_at = NULL,
     attempt_count = 0,
     next_attempt_at = now(),
     locked_until = NULL,
+    lease_owner = NULL,
     last_error = NULL
-WHERE id = '<event-uuid>' AND published_at IS NULL;
+WHERE id = '<event-uuid>' AND dead_lettered_at IS NOT NULL;
 ```
+
+Этот SQL повторяет `replayDeadLettered(eventId)`: исходные `id`, payload,
+event type и aggregate id сохраняются, попытки, lease и DLQ-состояние
+сбрасываются. Следующий batch доставит тот же envelope.
+
+## Добавление исходящего события
+
+Для нового события тому же consumer-у по `USER_EVENTS_URL`:
+
+1. Добавить schema, выведенный тип и example в `integration-event-contracts`;
+   сначала развернуть поддержку consumer-а.
+2. Включить тип в `OutgoingIntegrationEvent`; сохранять старые версии,
+   пока они могут находиться в pending или DLQ.
+3. Создать `events/create-<fact>.event.ts` в бизнес-модуле-владельце.
+   Фабрика создаёт `eventId` один раз и возвращает конкретный контракт.
+4. В use case вызвать `outboxEvents.append(event, aggregateId)` в той же
+   Unit of Work, что и изменение бизнес-состояния.
+5. Проверить реальную фабрику runtime-схемой, rollback и прохождение доставки;
+   развернуть producer и наблюдать метрики.
+
+Общий claim/sender/retry/cron не требует ветвления по `event.type`.
+Другой независимый consumer требует отдельного решения для маршрутизации и
+состояния каждой подписки: текущая outbox хранит одно состояние доставки
+на envelope.
 
 Формат ошибки одинаков для всех эндпоинтов:
 
