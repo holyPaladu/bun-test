@@ -17,21 +17,23 @@ export const healthRoute = (sql: DatabaseClient) =>
         },
       },
     )
-    .get(
-      '/ready',
-      async ({ set }) => {
-        try {
-          await sql`SELECT 1`
-          return { status: 'ok' as const }
-        } catch {
-          set.status = 503
-          return { status: 'not ready' as const }
-        }
-      },
-      {
-        response: {
-          200: 'ready',
-          503: 'notReady',
+    .group('/db', app => app
+      .get(
+        '/ready',
+        async ({ set }) => {
+          try {
+            await sql`SELECT 1`
+            return { status: 'ok' as const }
+          } catch {
+            set.status = 503
+            return { status: 'not ready' as const }
+          }
         },
-      },
+        {
+          response: {
+            200: 'ready',
+            503: 'notReady',
+          },
+        },
+      )
     )

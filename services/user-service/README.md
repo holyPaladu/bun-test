@@ -41,7 +41,7 @@ JWT-ключи предварительно должны быть заполне
 ## API
 
 - `GET /health/check` — liveness;
-- `GET /health/ready` — проверка соединения с users database;
+- `GET /health/db/ready` — проверка соединения с users database;
 - `POST /internal/events` — защищённый consumer поддерживаемых событий
   (сейчас `auth.account-created.v1`);
 - `GET /api/users/me` — получить существующий профиль по проверенному JWT `sub`;

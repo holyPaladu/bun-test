@@ -11,25 +11,25 @@
 
 ## С чего начать сейчас
 
-Первая задача — **AUTH-1: унифицировать readiness**. Она небольшая, устраняет
-уже найденное расхождение двух сервисов и создаёт понятный образец завершённой
-задачи «код + schema + тест + docs».
+**AUTH-1: унифицировать readiness** завершена: оба сервиса используют общий
+контракт «liveness отдельно, readiness с HTTP 503 при недоступной БД». Следующая
+задача — обязательные PostgreSQL-проверки из AUTH-2.
 
 ### AUTH-1. Единый readiness endpoint
 
-- [ ] В `services/auth-service/src/shared/http/routes/health/health.route.ts`
-  переименовать `/db-ready` в `db/ready`.
-- [ ] При успешном `SELECT 1` возвращать HTTP 200 и `{ "status": "ok" }`.
-- [ ] При ошибке БД возвращать HTTP 503 и `{ "status": "not ready" }`, как в
+- [x] В `services/auth-service/src/shared/http/routes/health/health.route.ts`
+  переименовать `/db-ready` в `/db/ready`.
+- [x] При успешном `SELECT 1` возвращать HTTP 200 и `{ "status": "ok" }`.
+- [x] При ошибке БД возвращать HTTP 503 и `{ "status": "not ready" }`, как в
   `user-service`.
-- [ ] В `health.schema.ts` явно описать ответы 200 и 503.
-- [ ] Исправить auth e2e-тест: ожидать `/health/ready`.
-- [ ] Добавить тест недоступной БД и проверить именно status 503, а не только
+- [x] В `health.schema.ts` явно описать ответы 200 и 503.
+- [x] Исправить auth e2e-тест: ожидать `/health/db/ready`.
+- [x] Добавить тест недоступной БД и проверить именно status 503, а не только
   поле ответа.
-- [ ] Проверить, что `/health/check` остаётся liveness и не обращается к БД.
-- [ ] Обновить таблицу API в `services/auth-service/README.md`.
-- [ ] Удалить описание временного расхождения readiness из README и roadmap.
-- [ ] Запустить проверки блока ниже.
+- [x] Проверить, что `/health/check` остаётся liveness и не обращается к БД.
+- [x] Обновить таблицу API в `services/auth-service/README.md`.
+- [x] Удалить описание временного расхождения readiness из README и roadmap.
+- [x] Запустить проверки блока ниже.
 
 Проверки AUTH-1:
 
@@ -41,7 +41,7 @@ bun run test:unit
 bun run build
 ```
 
-Готово, когда оба сервиса используют `GET /health/ready`, успешная проверка даёт
+Готово: оба сервиса используют `GET /health/db/ready`, успешная проверка даёт
 200, недоступная БД — 503, а liveness продолжает отвечать независимо от БД.
 
 ## Затем: обязательные проверки PostgreSQL
@@ -187,7 +187,7 @@ AUTH-5 выполняется после P0 или раньше отдельны
 
 ## Финальный gate auth-service
 
-- [ ] AUTH-1 завершён.
+- [x] AUTH-1 завершён.
 - [ ] PostgreSQL и migration tests обязательны в CI.
 - [ ] Все команды из [общего документа проверок](../../quality-gates.md) зелёные и
   PostgreSQL-тесты не пропущены.

@@ -58,7 +58,6 @@ posting. Новые финансовые возможности следует �
 - выполнить P0 из [roadmap user-service](services/user-service-roadmap.md);
 - выполнить P0 из [roadmap auth-service](services/auth-service-roadmap.md);
 - запускать PostgreSQL и contract tests обоих сервисов в CI;
-- унифицировать readiness contract двух сервисов;
 - определить correlation ID между HTTP, outbox и incoming consumer;
 - описать локальный bootstrap/demo environment и secret handling;
 - принять соглашение о UUID, timestamps, money minor units и currency code.

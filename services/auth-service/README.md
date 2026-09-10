@@ -86,7 +86,7 @@ Production-сборка проходит обязательный quality gate: 
 | Метод | Путь | Описание |
 |---|---|---|
 | `GET` | `/health/check` | Проверка живости |
-| `GET` | `/health/db-ready` | Текущая проверка соединения с auth database; состояние возвращается в body |
+| `GET` | `/health/db/ready` | Текущая проверка соединения с auth database; состояние возвращается в body |
 | `GET` | `/metrics` | Outbox delivery/lag/pending/DLQ в формате Prometheus |
 | `GET` | `/.well-known/jwks.json` | Публичные JWT-ключи |
 | `POST` | `/api/auth/register` | Регистрация: 201 / 409 / 422 |
@@ -101,10 +101,9 @@ Production-сборка проходит обязательный quality gate: 
 Точные body, query, response и security schemas публикуются в OpenAPI UI на
 `/swagger`, JSON-описание — на `/swagger/json`.
 
-`/health/db-ready` отражает фактический текущий код. Он пока отличается от
-`user-service`, где используется `/health/ready` и HTTP 503 при недоступной БД.
-Унификация записана как AUTH-1 в
-[`roadmap auth-service`](../../docs/services/auth-service-roadmap.md).
+`/health/db/ready` возвращает HTTP 200 после успешного `SELECT 1` и HTTP 503 при
+недоступной auth database. Оба сервиса используют этот единый readiness contract;
+`/health/check` остаётся liveness и не обращается к БД.
 
 После миграции `0006_rename_users_to_auth_accounts.sql` доменная сущность и
 таблица называются `AuthAccount`/`auth_accounts`, а статус входа —

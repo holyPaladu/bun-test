@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createApp } from '@/app'
 import type { Container } from '@/container'
+import type { DatabaseClient } from '@/shared/database/client'
 import type { AccessTokenInput } from '@/shared/lib/jwt/jwt-signer'
 import type { AccessTokenPayload, JwtVerifier } from '@/shared/lib/jwt/jwt-verifier'
 import type { Logger } from '@/shared/lib/logger/logger'
 import { createInMemoryDatabase, type InMemoryDatabase } from '../helpers/in-memory-database'
 import { createAuthUnitOfWork } from '@/shared/database/auth-unit-of-work'
 import { createPrometheusRegistry } from '@/shared/http/routes/metrics/prometheus.registry'
+import { healthRoute } from '@/shared/http/routes/health/health.route'
 
 const password = 'password-123'
 const email = 'user@example.com'
@@ -124,7 +126,7 @@ describe('auth service HTTP e2e', () => {
 
   test('serves health and JWKS outside the business response envelope', async () => {
     const health = await call(context, '/health/check')
-    const ready = await call(context, '/health/db-ready')
+    const ready = await call(context, '/health/db/ready')
     const jwks = await call(context, '/.well-known/jwks.json')
     const metrics = await call(context, '/metrics')
 
@@ -136,6 +138,21 @@ describe('auth service HTTP e2e', () => {
     })] })
     expect(metrics.status).toBe(200)
     expect(await metrics.text()).toContain('auth_outbox_pending_events 0')
+  })
+
+  test('reports database readiness failure without affecting liveness', async () => {
+    const unavailableSql = (async () => {
+      throw new Error('database unavailable')
+    }) as unknown as DatabaseClient
+    const app = healthRoute(unavailableSql)
+
+    const liveness = await app.handle(new Request('http://localhost/health/check'))
+    const readiness = await app.handle(new Request('http://localhost/health/db/ready'))
+
+    expect(liveness.status).toBe(200)
+    expect(await json(liveness)).toEqual({ status: 'ok' })
+    expect(readiness.status).toBe(503)
+    expect(await json(readiness)).toEqual({ status: 'not ready' })
   })
 
   test('registers a normalized auth account and validates request bodies', async () => {

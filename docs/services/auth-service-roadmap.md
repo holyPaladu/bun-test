@@ -24,26 +24,14 @@ outbox события `auth.account-created.v1`.
 - outbox использует lease owner, retry/backoff, DLQ и ручной replay;
 - публичный ключ доступен через JWKS, приватный ключ остаётся в auth-service;
 - unit и HTTP e2e покрывают основную auth/session вертикаль;
+- `/health/check` отделён от `/health/db/ready`, а недоступная БД возвращается как
+  HTTP 503;
 - production binary и migration bundle собираются отдельно от исходников.
 
 Следующая работа должна закрывать конкретные пробелы, а не заменять Bun/Elysia,
 переносить outbox на Kafka или объединять auth-service с user-service.
 
 ## Следующая работа
-
-### AUTH-1. Унифицировать readiness — приоритет P0
-
-Сейчас фактический endpoint auth-service — `GET /health/db-ready`, он возвращает
-HTTP 200 и передаёт состояние в body. `user-service` использует
-`GET /health/ready` и возвращает 503 при недоступной БД.
-
-Нужно выбрать общий контракт. Рекомендуемый итог для обоих сервисов:
-`GET /health/ready`, HTTP 200 только при готовности и 503 при недоступной
-зависимости. Затем одновременно обновить route, schema, e2e, Compose probe и
-README. Liveness `/health/check` не должен обращаться к БД.
-
-Готово, когда orchestrator может отличить «процесс жив» от «процесс готов
-принимать трафик» только по HTTP status.
 
 ### AUTH-2. Сделать PostgreSQL и migration tests обязательными — приоритет P0
 
@@ -87,7 +75,7 @@ audit reason. Если другим владельцам данных дейст
 
 ## Рекомендуемый порядок
 
-1. AUTH-1 и AUTH-2 — сделать контракт здоровья и текущие гарантии проверяемыми.
+1. AUTH-2 — сделать PostgreSQL и migration tests обязательными.
 2. AUTH-3 — обеспечить наблюдаемость и восстановление уже существующей доставки.
 3. Параллельно закрыть P0 `user-service` из его roadmap.
 4. Начать первый organization slice в `finance-core`.
