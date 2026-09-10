@@ -576,9 +576,10 @@ pending → leased → published
 - Inbox дедуплицирует только одинаковый `eventId`, а не похожий payload.
 - Успешный HTTP-ответ означает, что consumer transaction уже завершилась.
 - Метрики хранятся в памяти процесса, а размеры pending/DLQ читаются из БД.
-- Текущий `docker-compose.yml` поднимает PostgreSQL и `auth-service`, но не
-  описывает контейнер `user-service`; для полной доставки consumer всё равно
-  должен быть отдельно запущен и доступен по `USER_EVENTS_URL`.
+- Текущий `docker-compose.yml` поднимает оба сервиса, отдельную PostgreSQL для
+  каждого и migration-контейнеры. `auth-service` доставляет события по
+  `USER_EVENTS_URL=http://user-service:3001/internal/events`; общий delivery token
+  передаётся producer-у и consumer-у из `EVENT_TOKEN`.
 
 Это не обязательно ошибки. Это свойства и границы, которые нужно помнить при
 рассуждении о системе.

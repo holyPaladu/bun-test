@@ -90,5 +90,11 @@ bun test
 bun run build
 ```
 
+Назначение каждого уровня, запуск с настоящей PostgreSQL и последний
+зафиксированный результат описаны в
+[`docs/quality-gates.md`](../../docs/quality-gates.md). Без
+`TEST_DATABASE_URL` PostgreSQL-тесты будут показаны как `skip`; зелёный итог
+обычного `bun test` сам по себе не доказывает транзакции и конкуренцию в СУБД.
+
 Для внутреннего endpoint задайте `EVENT_CONSUMER_TOKEN` тем же случайным
 значением (не менее 16 символов), что и `EVENT_DELIVERY_TOKEN` auth-service.
