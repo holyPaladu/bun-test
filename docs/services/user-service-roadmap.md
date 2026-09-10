@@ -1,6 +1,6 @@
 # Roadmap user-service
 
-Статус: план развития существующего сервиса, актуален на 9 сентября 2026 года.
+Статус: план развития существующего сервиса, актуален на 10 сентября 2026 года.
 
 ## Текущая ответственность
 
@@ -78,13 +78,20 @@ Business problem: профиль сейчас принимает свободн�
 
 ### US-4. Тестирование отказов и контрактов — приоритет P0
 
-- запуск PostgreSQL integration tests в CI, а не только при ручном
-  `TEST_DATABASE_URL`;
-- contract test общей package-schema против реального HTTP consumer-а;
-- конкурентная доставка одного `eventId`;
-- rollback inbox при ошибке handler-а;
-- JWKS rotation/cache failure, неверные issuer/audience/expiry;
-- тест миграций с чистой БД и с предыдущей версией schema.
+Уже есть тесты package example против consumer schema и реального HTTP route,
+rollback handler-а, неверного JWT issuer, JWKS transport failure, а также
+PostgreSQL-тесты rollback inbox и конкурентной доставки одного `eventId`. При
+обычном `bun test` четыре PostgreSQL-теста пропускаются без
+`TEST_DATABASE_URL`.
+
+Оставшаяся работа:
+
+- запускать PostgreSQL integration tests в CI и запрещать зелёный gate при skip;
+- проверить результат реальной producer-фабрики `createAccountCreatedEvent`
+  consumer-схемой, а не ограничиваться фиксированным package example;
+- проверить JWKS rotation/cache refresh, неверные audience/expiry и clock skew;
+- тестировать миграции с чистой БД и с предыдущей версией schema;
+- следовать единому [описанию проверок](../quality-gates.md).
 
 ### US-5. User directory — приоритет P1, только после organization module
 
@@ -124,4 +131,3 @@ authorization, pagination, rate limit, минимальный набор воз�
 - PostgreSQL, contract и failure tests обязательны в CI;
 - ошибки incoming delivery измеряются и имеют runbook;
 - удаление/блокировка account имеют определённое, протестированное поведение.
-

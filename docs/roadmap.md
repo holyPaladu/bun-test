@@ -1,6 +1,20 @@
 # Roadmap B2B fintech-платформы
 
-Статус: основной план дальнейшей разработки, актуален на 9 сентября 2026 года.
+Статус: основной план дальнейшей разработки, актуален на 10 сентября 2026 года.
+
+## Решение по сервисам
+
+| Компонент | Решение сейчас | Следующее действие |
+|---|---|---|
+| `auth-service` | Оставить отдельным и доработать | Закрыть P0 из [плана auth-service](services/auth-service-roadmap.md) |
+| `user-service` | Оставить отдельным и доработать | Закрыть P0 из [плана user-service](services/user-service-roadmap.md) |
+| `finance-core` | Создать следующим как модульный монолит | Реализовать [organization/membership slice](services/finance-core-plan.md) |
+| notifications / analytics | Пока не создавать | Вернуться после надёжных financial events и реального consumer use case |
+| отдельные organization/payment/ledger services | Не создавать | Рассматривать только по критериям выделения из плана `finance-core` |
+
+То есть ближайшая работа — не третий маленький микросервис и не Kafka. Сначала
+делаем воспроизводимыми гарантии двух существующих сервисов, затем строим одну
+tenant-safe вертикаль в `finance-core`.
 
 ## Откуда начинаем
 
@@ -17,8 +31,7 @@
 Это foundation идентичности, но ещё не fintech domain. Следующая цель — один
 сквозной сценарий Payment Request от tenant membership до безопасного ledger
 posting. Новые финансовые возможности следует строить в одном модульном монолите
-(`finance-core`; окончательное имя можно выбрать при создании), а не сразу
-создавать набор микросервисов.
+(`finance-core`), а не сразу создавать набор микросервисов.
 
 ## Правило работы над каждым модулем
 
@@ -43,9 +56,9 @@ posting. Новые финансовые возможности следует �
 Цель: не строить финансовый домен на неясной identity-модели.
 
 - выполнить P0 из [roadmap user-service](services/user-service-roadmap.md);
+- выполнить P0 из [roadmap auth-service](services/auth-service-roadmap.md);
 - запускать PostgreSQL и contract tests обоих сервисов в CI;
-- обновить README auth-service по фактическому API или считать OpenAPI
-  единственным endpoint-level источником истины;
+- унифицировать readiness contract двух сервисов;
 - определить correlation ID между HTTP, outbox и incoming consumer;
 - описать локальный bootstrap/demo environment и secret handling;
 - принять соглашение о UUID, timestamps, money minor units и currency code.
@@ -206,9 +219,10 @@ risk-blocked amount. Dashboard не должен становиться втор
 
 ## Ближайшие три результата
 
-1. Закрытый P0 `user-service` и обязательные PostgreSQL tests в CI.
-2. Короткий design document для Organization/Membership/Permissions по правилу
-   десяти пунктов выше.
-3. Первый вертикальный slice: создать организацию, добавить membership, проверить
+1. Закрытый P0 `auth-service` и `user-service`, обязательные PostgreSQL tests в
+   CI и зелёный [набор проверок](quality-gates.md).
+2. Уточнённый design document для Organization/Membership/Permissions на основе
+   [плана `finance-core`](services/finance-core-plan.md) и правила десяти пунктов
+   выше.
+3. Первый вертикальный slice: создать organization, добавить membership, проверить
    permission и доказать tenant isolation — без Kafka и без payment CRUD.
-
