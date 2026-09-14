@@ -39,6 +39,10 @@
 - [README auth-service](../services/auth-service/README.md)
 - [README user-service](../services/user-service/README.md)
 
+## Текущие технические миграции
+
+- [Переход сервисов на Elysia 2 beta](architecture/elysia-2-migration.md). Только в планах не берем в работу никогда.
+
 README сервиса описывает то, что существует сейчас. Roadmap описывает будущую
 работу. Документ со словом «план» не должен после реализации оставаться вторым,
 конкурирующим источником истины.
