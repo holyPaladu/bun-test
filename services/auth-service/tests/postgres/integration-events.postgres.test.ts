@@ -143,13 +143,13 @@ run('integration events on PostgreSQL', () => {
       WHERE id = ${event.eventId}
     `
     await expect(outbox.replayDeadLettered(event.eventId)).resolves.toBe(true)
-    const [row] = await sql`
+    const [row] = await sql<Array<{ payload: string } & Record<string, unknown>>>`
       SELECT id, payload, event_type, aggregate_id, occurred_at, attempt_count,
              locked_until, lease_owner, last_error, published_at, dead_lettered_at,
              next_attempt_at <= now() AS due
       FROM outbox_events WHERE id = ${event.eventId}
     `
-    expect(row).toMatchObject({
+    expect({ ...row, payload: JSON.parse(row!.payload) }).toMatchObject({
       id: event.eventId, payload: event, event_type: event.type, aggregate_id: event.data.userId,
       occurred_at: new Date(event.occurredAt), attempt_count: 0, locked_until: null,
       lease_owner: null, last_error: null, published_at: null, dead_lettered_at: null, due: true,
